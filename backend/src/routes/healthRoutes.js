@@ -4,9 +4,11 @@ export function createHealthRouter(discordClient) {
   const router = Router();
 
   router.get("/", (_req, res) => {
-    res.json({
-      ok: true,
-      discordReady: discordClient.isReady()
+    const discordReady = discordClient.isReady();
+
+    res.status(discordReady ? 200 : 503).json({
+      ok: discordReady,
+      discordReady
     });
   });
 
