@@ -91,6 +91,7 @@ export function createDiscordClient() {
   const client = new Client({
     intents: [
       GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMembers,
       GatewayIntentBits.DirectMessages
     ],
     partials: [Partials.Channel]
