@@ -1,54 +1,9 @@
 import { Client, Events, GatewayIntentBits, Partials } from "discord.js";
-import { once } from "node:events";
 
-const DISCORD_API_BASE = "https://discord.com/api/v10";
-const CONNECT_TIMEOUT_MS = 45_000;
-const HTTP_TIMEOUT_MS = 10_000;
+const RETRY_DELAYS_MS = [15_000, 30_000, 60_000, 120_000, 300_000];
 
-function withTimeout(promise, timeoutMs, message) {
-  let timer;
-
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(message)), timeoutMs);
-  });
-
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
-
-async function fetchDiscord(path, token) {
-  const response = await fetch(`${DISCORD_API_BASE}${path}`, {
-    headers: {
-      Authorization: `Bot ${token}`,
-      "User-Agent": "VoxelSupport/1.0"
-    },
-    signal: AbortSignal.timeout(HTTP_TIMEOUT_MS)
-  });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    const details = body ? `: ${body.slice(0, 300)}` : "";
-    throw new Error(`Discord API returned HTTP ${response.status}${details}`);
-  }
-
-  return response.json();
-}
-
-async function validateDiscordAccess(token) {
-  console.log("[discord] Validating bot token through Discord REST API...");
-
-  const [bot, gateway] = await Promise.all([
-    fetchDiscord("/users/@me", token),
-    fetchDiscord("/gateway/bot", token)
-  ]);
-
-  const sessionLimit = gateway.session_start_limit;
-  const remaining = sessionLimit?.remaining ?? "unknown";
-  const total = sessionLimit?.total ?? "unknown";
-
-  console.log(`[discord] REST authentication OK as ${bot.username} (${bot.id}).`);
-  console.log(`[discord] Gateway session starts remaining: ${remaining}/${total}.`);
-
-  return { bot, gateway };
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function registerDiagnostics(client) {
@@ -91,22 +46,32 @@ export function createDiscordClient() {
 }
 
 export async function connectDiscordClient(client, token) {
-  if (client.isReady()) return client;
+  let attempt = 0;
 
-  await validateDiscordAccess(token);
-  console.log("[discord] Connecting to Discord Gateway...");
+  while (!client.isReady()) {
+    try {
+      console.log(`[discord] Connecting to Discord Gateway (attempt ${attempt + 1})...`);
 
-  const readyPromise = once(client, Events.ClientReady);
-  const loginPromise = client.login(token);
+      // Let discord.js own Discord REST/Gateway rate-limit handling.
+      await client.login(token);
 
-  await withTimeout(
-    Promise.all([loginPromise, readyPromise]),
-    CONNECT_TIMEOUT_MS,
-    `Discord Gateway did not reach ready state within ${CONNECT_TIMEOUT_MS / 1000} seconds`
-  );
+      if (!client.isReady()) {
+        throw new Error("Discord login completed without a ready client");
+      }
 
-  if (!client.isReady()) {
-    throw new Error("Discord Gateway finished login without entering ready state");
+      return client;
+    } catch (error) {
+      const retryDelay = RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)];
+      attempt += 1;
+
+      console.error(
+        `[discord] Connection attempt failed. Retrying in ${Math.round(retryDelay / 1000)}s:`,
+        error
+      );
+
+      await client.destroy().catch(() => {});
+      await sleep(retryDelay);
+    }
   }
 
   return client;
