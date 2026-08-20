@@ -94,6 +94,12 @@ export class DiscordSupportService {
   }
 
   async sendTicket(ticket) {
+    if (!this.client.isReady()) {
+      const error = new Error("O suporte está iniciando. Tente novamente em alguns segundos.");
+      error.statusCode = 503;
+      throw error;
+    }
+
     const owner = await this.client.users.fetch(this.ownerId);
     const botAvatar = this.client.user?.displayAvatarURL({ size: 128 }) ?? undefined;
     const preparedFiles = buildAttachments(ticket.files);
