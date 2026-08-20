@@ -15,26 +15,40 @@ function profileDivisionText(profile) {
   return profile.division.label || profile.division.key;
 }
 
+function nicknameText(roleResult) {
+  const nickname = roleResult.nickname;
+  if (!nickname?.managed) return "Não alterado";
+  if (nickname.skipped === "missing-manage-nicknames") return "Não alterado por falta de permissão";
+  if (nickname.skipped === "hierarchy") return "Não alterado pela hierarquia do servidor";
+  return nickname.value ? `\`${nickname.value}\`` : "Removido";
+}
+
 function buildSuccessEmbed(profile, roleResult, botAvatar) {
   const militaryText = profile.military.isMember
     ? profile.military.label || `Rank ${profile.military.rank}`
     : "Civil";
+  const characterName = profile.characterName || "Nome do personagem não disponível";
 
   return new EmbedBuilder()
     .setColor(EB_VERIFICATION_CONFIG.color)
     .setAuthor({ name: "Voxel • Verificação", iconURL: botAvatar })
     .setTitle("Verificação concluída")
-    .setDescription("Sua conta foi vinculada e os cargos do servidor foram sincronizados com os dados atuais do jogo.")
+    .setDescription("Sua conta foi vinculada e os dados do servidor foram sincronizados com o perfil atual do jogo.")
     .addFields(
       {
-        name: "Roblox",
-        value: `**${profile.displayName || profile.username}**\n\`${profile.username}\``,
+        name: "Personagem",
+        value: `**${characterName}**\n\`${profile.username}\``,
         inline: true
       },
       {
         name: "Posto ou graduação",
         value: militaryText,
         inline: true
+      },
+      {
+        name: "Apelido no servidor",
+        value: nicknameText(roleResult),
+        inline: false
       },
       {
         name: "Divisão",
@@ -170,7 +184,8 @@ export class DiscordVerificationService {
     return {
       linked: true,
       synced: true,
-      roles: roleResult.active
+      roles: roleResult.active,
+      nickname: roleResult.nickname
     };
   }
 
@@ -248,3 +263,4 @@ export class DiscordVerificationService {
     }
   }
 }
+
