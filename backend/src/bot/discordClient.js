@@ -1,24 +1,64 @@
 import { Client, Events, GatewayIntentBits, Partials } from "discord.js";
 
-const LOGIN_TIMEOUT_MS = 45_000;
-const RETRY_DELAYS_MS = [60_000, 120_000, 300_000, 600_000];
+const READY_TIMEOUT_MS = 90_000;
+const RETRY_DELAYS_MS = [15_000, 30_000, 60_000, 120_000];
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function createLoginTimeout() {
-  return new Promise((_, reject) => {
-    const timer = setTimeout(() => {
-      const error = new Error(
-        `Discord Gateway login did not finish within ${Math.round(LOGIN_TIMEOUT_MS / 1000)}s`
-      );
-      error.code = "DISCORD_LOGIN_TIMEOUT";
-      reject(error);
-    }, LOGIN_TIMEOUT_MS);
+function createReadyWaiter(client) {
+  if (client.isReady()) {
+    return {
+      promise: Promise.resolve(client),
+      cancel() {}
+    };
+  }
 
-    timer.unref?.();
+  let settled = false;
+  let resolveReady;
+  let rejectReady;
+
+  const promise = new Promise((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
   });
+
+  const cleanup = () => {
+    clearTimeout(timer);
+    client.off(Events.ClientReady, onReady);
+  };
+
+  const onReady = (readyClient) => {
+    if (settled) return;
+    settled = true;
+    cleanup();
+    resolveReady(readyClient);
+  };
+
+  const timer = setTimeout(() => {
+    if (settled) return;
+    settled = true;
+    cleanup();
+
+    const error = new Error(
+      `Discord client did not emit ClientReady within ${Math.round(READY_TIMEOUT_MS / 1000)}s`
+    );
+    error.code = "DISCORD_READY_TIMEOUT";
+    rejectReady(error);
+  }, READY_TIMEOUT_MS);
+
+  timer.unref?.();
+  client.once(Events.ClientReady, onReady);
+
+  return {
+    promise,
+    cancel() {
+      if (settled) return;
+      settled = true;
+      cleanup();
+    }
+  };
 }
 
 function registerDiagnostics(client) {
@@ -65,21 +105,26 @@ export async function connectDiscordClient(client, token) {
 
   while (!client.isReady()) {
     const attemptNumber = attempt + 1;
+    const readyWaiter = createReadyWaiter(client);
 
     try {
       console.log(`[discord] Connecting to Discord Gateway (attempt ${attemptNumber})...`);
 
-      await Promise.race([
-        client.login(token),
-        createLoginTimeout()
-      ]);
+      // client.login() starts the WebSocket session, but ClientReady is the
+      // authoritative signal that the bot can safely start handling work.
+      await client.login(token);
+      await readyWaiter.promise;
 
-      if (!client.isReady()) {
-        throw new Error("Discord login finished without a ready client");
-      }
-
+      console.log(`[discord] ClientReady confirmed on attempt ${attemptNumber}.`);
       return client;
     } catch (error) {
+      readyWaiter.cancel();
+
+      if (client.isReady()) {
+        console.log(`[discord] Client became ready while handling attempt ${attemptNumber}.`);
+        return client;
+      }
+
       const retryDelay = RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)];
       attempt += 1;
 
