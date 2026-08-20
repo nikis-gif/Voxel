@@ -1,6 +1,29 @@
 import { PermissionFlagsBits } from "discord.js";
 import { EB_VERIFICATION_CONFIG, getRankRoleKey } from "../config/ebVerificationConfig.js";
 
+const DISCORD_NICKNAME_MAX_LENGTH = 32;
+const RANK_TAG_BY_RANK = Object.freeze({
+  1: "[REC]",
+  2: "[SLD]",
+  3: "[CB]",
+  4: "[T-SGT]",
+  5: "[S-SGT]",
+  6: "[P-SGT]",
+  7: "[S-BTN]",
+  8: "[AAO]",
+  9: "[S-TN]",
+  10: "[P-TN]",
+  11: "[CAP]",
+  12: "[MAJ]",
+  13: "[TEN-C]",
+  14: "[COR]",
+  15: "[GEN-B]",
+  16: "[GEN-D]",
+  17: "[GEN-E]",
+  18: "[S-COM]",
+  19: "[COM]"
+});
+
 function normalizeName(value) {
   return value.normalize("NFKC").trim().toLocaleLowerCase("pt-BR");
 }
@@ -8,6 +31,49 @@ function normalizeName(value) {
 function roleOverrideId(roleIds, key) {
   const value = roleIds?.[key];
   return typeof value === "string" && /^\d{17,20}$/.test(value) ? value : null;
+}
+
+function cleanCharacterName(value) {
+  if (typeof value !== "string") return "";
+
+  return value
+    .normalize("NFKC")
+    .replace(/[\u0000-\u001F\u007F]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function truncateNickname(value) {
+  return Array.from(value).slice(0, DISCORD_NICKNAME_MAX_LENGTH).join("").trimEnd();
+}
+
+function rankTag(profile) {
+  if (!profile?.military?.isMember) return "";
+
+  const label = typeof profile.military.label === "string" ? profile.military.label.trim() : "";
+  const labelTag = label.match(/^\[[A-Z0-9-]+\]/i)?.[0];
+  if (labelTag) return labelTag.toUpperCase();
+
+  return RANK_TAG_BY_RANK[profile.military.rank] ?? "";
+}
+
+function desiredNickname(profile) {
+  if (!Object.prototype.hasOwnProperty.call(profile, "characterName")) {
+    return { managed: false, value: null };
+  }
+
+  const characterName = cleanCharacterName(profile.characterName);
+  if (!characterName) {
+    return { managed: true, value: null };
+  }
+
+  const prefix = rankTag(profile);
+  const nickname = prefix ? `${prefix} ${characterName}` : characterName;
+
+  return {
+    managed: true,
+    value: truncateNickname(nickname)
+  };
 }
 
 export class DiscordRoleSyncService {
@@ -93,6 +159,42 @@ export class DiscordRoleSyncService {
     }
   }
 
+  async syncNickname(member, profile, reason) {
+    const desired = desiredNickname(profile);
+    if (!desired.managed) {
+      return { managed: false, changed: false, value: member.nickname ?? null };
+    }
+
+    const botMember = member.guild.members.me;
+    if (!botMember?.permissions.has(PermissionFlagsBits.ManageNicknames)) {
+      console.warn(`[verification] Voxel cannot manage nicknames in guild ${member.guild.id}.`);
+      return {
+        managed: true,
+        changed: false,
+        value: member.nickname ?? null,
+        skipped: "missing-manage-nicknames"
+      };
+    }
+
+    if (member.id === member.guild.ownerId || !member.manageable) {
+      console.warn(`[verification] Nickname hierarchy blocked for Discord ${member.id}.`);
+      return {
+        managed: true,
+        changed: false,
+        value: member.nickname ?? null,
+        skipped: "hierarchy"
+      };
+    }
+
+    const currentNickname = member.nickname ?? null;
+    if (currentNickname === desired.value) {
+      return { managed: true, changed: false, value: desired.value };
+    }
+
+    await member.setNickname(desired.value, reason);
+    return { managed: true, changed: true, value: desired.value };
+  }
+
   async sync(member, profile) {
     if (member.guild.id !== this.guildId) {
       const error = new Error("Servidor de verificação inválido.");
@@ -120,12 +222,15 @@ export class DiscordRoleSyncService {
     if (removeIds.length > 0) await member.roles.remove(removeIds, reason);
     if (addIds.length > 0) await member.roles.add(addIds, reason);
 
+    const nickname = await this.syncNickname(member, profile, reason);
+
     return {
       added: addIds.map((id) => managedRoles.size > 0
         ? [...managedRoles.values()].find((role) => role.id === id)?.name ?? id
         : id),
       removed: removeIds.map((id) => [...managedRoles.values()].find((role) => role.id === id)?.name ?? id),
-      active: [...desiredIds].map((id) => [...managedRoles.values()].find((role) => role.id === id)?.name ?? id)
+      active: [...desiredIds].map((id) => [...managedRoles.values()].find((role) => role.id === id)?.name ?? id),
+      nickname
     };
   }
 
