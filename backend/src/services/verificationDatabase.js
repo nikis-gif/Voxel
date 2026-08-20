@@ -1,365 +1,234 @@
-import { mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+const ROOT_PATH = "voxel/v1";
 
-function safeJsonParse(value) {
-  if (typeof value !== "string" || value.length === 0) return null;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
+function clone(value) {
+  return value == null ? value : structuredClone(value);
 }
 
-function mapLink(row) {
-  if (!row) return null;
+function normalizeLink(value) {
+  if (!value || typeof value !== "object") return null;
   return {
-    robloxUserId: Number(row.roblox_user_id),
-    discordUserId: String(row.discord_user_id),
-    guildId: String(row.guild_id),
-    robloxUsername: String(row.roblox_username),
-    linkedAt: Number(row.linked_at),
-    updatedAt: Number(row.updated_at)
+    robloxUserId: Number(value.robloxUserId),
+    discordUserId: String(value.discordUserId),
+    guildId: String(value.guildId),
+    robloxUsername: String(value.robloxUsername),
+    linkedAt: Number(value.linkedAt),
+    updatedAt: Number(value.updatedAt)
   };
 }
 
-function mapGameBan(row) {
-  if (!row) return null;
+function normalizeGameBan(value) {
+  if (!value || typeof value !== "object") return null;
   return {
-    robloxUserId: Number(row.roblox_user_id),
-    robloxUsername: String(row.roblox_username),
-    discordUserId: row.discord_user_id ? String(row.discord_user_id) : null,
-    moderatorDiscordId: String(row.moderator_discord_id),
-    reason: String(row.reason),
-    bannedAt: Number(row.banned_at),
-    updatedAt: Number(row.updated_at),
-    expiresAt: row.expires_at == null ? null : Number(row.expires_at),
-    source: row.source ? String(row.source) : "manual"
+    robloxUserId: Number(value.robloxUserId),
+    robloxUsername: String(value.robloxUsername),
+    discordUserId: value.discordUserId ? String(value.discordUserId) : null,
+    moderatorDiscordId: String(value.moderatorDiscordId),
+    reason: String(value.reason),
+    bannedAt: Number(value.bannedAt),
+    updatedAt: Number(value.updatedAt),
+    expiresAt: value.expiresAt == null ? null : Number(value.expiresAt),
+    source: value.source ? String(value.source) : "manual"
   };
 }
 
-function mapWarning(row) {
-  if (!row) return null;
+function normalizeWarning(id, value) {
+  if (!value || typeof value !== "object") return null;
   return {
-    id: Number(row.id),
-    discordUserId: String(row.discord_user_id),
-    moderatorDiscordId: String(row.moderator_discord_id),
-    reason: String(row.reason),
-    createdAt: Number(row.created_at)
+    id: String(id),
+    discordUserId: String(value.discordUserId),
+    moderatorDiscordId: String(value.moderatorDiscordId),
+    reason: String(value.reason),
+    createdAt: Number(value.createdAt)
   };
 }
 
-function mapTicket(row) {
-  if (!row) return null;
+function normalizeTicket(value) {
+  if (!value || typeof value !== "object") return null;
   return {
-    discordUserId: String(row.discord_user_id),
-    channelId: row.channel_id ? String(row.channel_id) : null,
-    openedAt: Number(row.opened_at),
-    closedAt: row.closed_at == null ? null : Number(row.closed_at),
-    updatedAt: Number(row.updated_at)
+    discordUserId: String(value.discordUserId),
+    channelId: value.channelId ? String(value.channelId) : null,
+    openedAt: Number(value.openedAt),
+    closedAt: value.closedAt == null ? null : Number(value.closedAt),
+    updatedAt: Number(value.updatedAt)
   };
 }
 
-function mapRewardCode(row) {
-  if (!row) return null;
+function normalizeReward(value) {
+  if (!value || typeof value !== "object") return null;
   return {
-    code: String(row.code),
-    discordUserId: String(row.discord_user_id),
-    robloxUserId: Number(row.roblox_user_id),
-    rewardType: String(row.reward_type),
-    amount: Number(row.amount),
-    createdAt: Number(row.created_at),
-    expiresAt: Number(row.expires_at),
-    reservationToken: row.reservation_token ? String(row.reservation_token) : null,
-    reservedAt: row.reserved_at == null ? null : Number(row.reserved_at),
-    consumedAt: row.consumed_at == null ? null : Number(row.consumed_at)
+    code: String(value.code),
+    discordUserId: String(value.discordUserId),
+    robloxUserId: Number(value.robloxUserId),
+    rewardType: String(value.rewardType),
+    amount: Number(value.amount),
+    createdAt: Number(value.createdAt),
+    expiresAt: Number(value.expiresAt),
+    reservationToken: value.reservationToken ? String(value.reservationToken) : null,
+    reservedAt: value.reservedAt == null ? null : Number(value.reservedAt),
+    consumedAt: value.consumedAt == null ? null : Number(value.consumedAt)
   };
+}
+
+function objectValues(value) {
+  if (!value || typeof value !== "object") return [];
+  return Object.entries(value);
 }
 
 export class VerificationDatabase {
-  constructor(databasePath) {
-    this.path = resolve(databasePath);
-    mkdirSync(dirname(this.path), { recursive: true });
-
-    this.database = new DatabaseSync(this.path, { timeout: 5_000 });
-    this.database.exec(`
-      PRAGMA journal_mode = WAL;
-      PRAGMA foreign_keys = ON;
-
-      CREATE TABLE IF NOT EXISTS verification_links (
-        roblox_user_id INTEGER PRIMARY KEY,
-        discord_user_id TEXT NOT NULL UNIQUE,
-        guild_id TEXT NOT NULL,
-        roblox_username TEXT NOT NULL,
-        linked_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
-      ) STRICT;
-
-      CREATE TABLE IF NOT EXISTS verification_profiles (
-        roblox_user_id INTEGER PRIMARY KEY,
-        profile_json TEXT NOT NULL,
-        updated_at INTEGER NOT NULL
-      ) STRICT;
-
-      CREATE TABLE IF NOT EXISTS game_bans (
-        roblox_user_id INTEGER PRIMARY KEY,
-        roblox_username TEXT NOT NULL,
-        discord_user_id TEXT,
-        moderator_discord_id TEXT NOT NULL,
-        reason TEXT NOT NULL,
-        banned_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        expires_at INTEGER,
-        source TEXT NOT NULL DEFAULT 'manual'
-      ) STRICT;
-
-      CREATE TABLE IF NOT EXISTS member_warnings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        discord_user_id TEXT NOT NULL,
-        moderator_discord_id TEXT NOT NULL,
-        reason TEXT NOT NULL,
-        created_at INTEGER NOT NULL
-      ) STRICT;
-
-      CREATE TABLE IF NOT EXISTS support_tickets (
-        discord_user_id TEXT PRIMARY KEY,
-        channel_id TEXT,
-        opened_at INTEGER NOT NULL,
-        closed_at INTEGER,
-        updated_at INTEGER NOT NULL
-      ) STRICT;
-
-      CREATE TABLE IF NOT EXISTS reward_codes (
-        code TEXT PRIMARY KEY,
-        discord_user_id TEXT NOT NULL,
-        roblox_user_id INTEGER NOT NULL,
-        reward_type TEXT NOT NULL,
-        amount INTEGER NOT NULL,
-        created_at INTEGER NOT NULL,
-        expires_at INTEGER NOT NULL,
-        reservation_token TEXT,
-        reserved_at INTEGER,
-        consumed_at INTEGER
-      ) STRICT;
-
-      CREATE INDEX IF NOT EXISTS idx_game_bans_discord_user ON game_bans(discord_user_id);
-      CREATE INDEX IF NOT EXISTS idx_member_warnings_user ON member_warnings(discord_user_id, created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_reward_codes_discord ON reward_codes(discord_user_id, created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_reward_codes_roblox ON reward_codes(roblox_user_id, created_at DESC);
-    `);
-
-    this.ensureColumn("game_bans", "expires_at", "INTEGER");
-    this.ensureColumn("game_bans", "source", "TEXT NOT NULL DEFAULT 'manual'");
-
-    this.prepareStatements();
+  constructor(database) {
+    this.database = database;
+    this.root = database.ref(ROOT_PATH);
+    this.linksRef = this.root.child("verification/links");
+    this.profilesRef = this.root.child("verification/profiles");
+    this.gameBansRef = this.root.child("moderation/gameBans");
+    this.warningsRef = this.root.child("moderation/warnings");
+    this.ticketsRef = this.root.child("tickets");
+    this.rewardsRef = this.root.child("rewards");
   }
 
-  ensureColumn(tableName, columnName, definition) {
-    const columns = this.database.prepare(`PRAGMA table_info(${tableName})`).all();
-    if (columns.some((column) => column.name === columnName)) return;
-    this.database.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  async init() {
+    await this.root.child("_meta").update({
+      schemaVersion: 1,
+      storage: "firebase-realtime-database",
+      lastBackendBootAt: Date.now()
+    });
   }
 
-  prepareStatements() {
-    this.findByRoblox = this.database.prepare(`
-      SELECT roblox_user_id, discord_user_id, guild_id, roblox_username, linked_at, updated_at
-      FROM verification_links WHERE roblox_user_id = ? LIMIT 1
-    `);
-    this.findByDiscord = this.database.prepare(`
-      SELECT roblox_user_id, discord_user_id, guild_id, roblox_username, linked_at, updated_at
-      FROM verification_links WHERE discord_user_id = ? LIMIT 1
-    `);
-    this.upsertLink = this.database.prepare(`
-      INSERT INTO verification_links (roblox_user_id, discord_user_id, guild_id, roblox_username, linked_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(roblox_user_id) DO UPDATE SET
-        discord_user_id = excluded.discord_user_id,
-        guild_id = excluded.guild_id,
-        roblox_username = excluded.roblox_username,
-        updated_at = excluded.updated_at
-    `);
-    this.touchProfile = this.database.prepare(`
-      UPDATE verification_links SET roblox_username = ?, updated_at = ? WHERE roblox_user_id = ?
-    `);
-    this.deleteLinkByDiscord = this.database.prepare(`DELETE FROM verification_links WHERE discord_user_id = ?`);
-    this.saveProfileStatement = this.database.prepare(`
-      INSERT INTO verification_profiles (roblox_user_id, profile_json, updated_at)
-      VALUES (?, ?, ?)
-      ON CONFLICT(roblox_user_id) DO UPDATE SET profile_json = excluded.profile_json, updated_at = excluded.updated_at
-    `);
-    this.findProfile = this.database.prepare(`
-      SELECT roblox_user_id, profile_json, updated_at FROM verification_profiles WHERE roblox_user_id = ? LIMIT 1
-    `);
-    this.deleteProfile = this.database.prepare(`DELETE FROM verification_profiles WHERE roblox_user_id = ?`);
+  async assertLinkAvailable(robloxUserId, discordUserId) {
+    const [existingRoblox, existingDiscord] = await Promise.all([
+      this.getByRobloxUserId(robloxUserId),
+      this.getByDiscordUserId(discordUserId)
+    ]);
 
-    this.upsertGameBanStatement = this.database.prepare(`
-      INSERT INTO game_bans (
-        roblox_user_id, roblox_username, discord_user_id, moderator_discord_id,
-        reason, banned_at, updated_at, expires_at, source
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(roblox_user_id) DO UPDATE SET
-        roblox_username = excluded.roblox_username,
-        discord_user_id = excluded.discord_user_id,
-        moderator_discord_id = excluded.moderator_discord_id,
-        reason = excluded.reason,
-        updated_at = excluded.updated_at,
-        expires_at = excluded.expires_at,
-        source = excluded.source
-    `);
-    this.findGameBan = this.database.prepare(`
-      SELECT roblox_user_id, roblox_username, discord_user_id, moderator_discord_id, reason,
-             banned_at, updated_at, expires_at, source
-      FROM game_bans WHERE roblox_user_id = ? LIMIT 1
-    `);
-    this.findGameBanByDiscord = this.database.prepare(`
-      SELECT roblox_user_id, roblox_username, discord_user_id, moderator_discord_id, reason,
-             banned_at, updated_at, expires_at, source
-      FROM game_bans WHERE discord_user_id = ? LIMIT 1
-    `);
-    this.deleteGameBan = this.database.prepare(`DELETE FROM game_bans WHERE roblox_user_id = ?`);
-    this.deleteExpiredGameBans = this.database.prepare(`DELETE FROM game_bans WHERE expires_at IS NOT NULL AND expires_at <= ?`);
-    this.countGameBansStatement = this.database.prepare(`SELECT COUNT(*) AS count FROM game_bans`);
-    this.listGameBansStatement = this.database.prepare(`
-      SELECT roblox_user_id, roblox_username, discord_user_id, moderator_discord_id, reason,
-             banned_at, updated_at, expires_at, source
-      FROM game_bans ORDER BY banned_at DESC LIMIT ? OFFSET ?
-    `);
-
-    this.insertWarningStatement = this.database.prepare(`
-      INSERT INTO member_warnings (discord_user_id, moderator_discord_id, reason, created_at)
-      VALUES (?, ?, ?, ?)
-    `);
-    this.countWarningsStatement = this.database.prepare(`
-      SELECT COUNT(*) AS count FROM member_warnings WHERE discord_user_id = ?
-    `);
-    this.listWarningsStatement = this.database.prepare(`
-      SELECT id, discord_user_id, moderator_discord_id, reason, created_at
-      FROM member_warnings WHERE discord_user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
-    `);
-
-    this.findTicketStatement = this.database.prepare(`
-      SELECT discord_user_id, channel_id, opened_at, closed_at, updated_at
-      FROM support_tickets WHERE discord_user_id = ? LIMIT 1
-    `);
-    this.upsertTicketStatement = this.database.prepare(`
-      INSERT INTO support_tickets (discord_user_id, channel_id, opened_at, closed_at, updated_at)
-      VALUES (?, ?, ?, NULL, ?)
-      ON CONFLICT(discord_user_id) DO UPDATE SET
-        channel_id = excluded.channel_id,
-        opened_at = excluded.opened_at,
-        closed_at = NULL,
-        updated_at = excluded.updated_at
-    `);
-    this.closeTicketStatement = this.database.prepare(`
-      UPDATE support_tickets SET channel_id = NULL, closed_at = ?, updated_at = ? WHERE discord_user_id = ?
-    `);
-
-    this.findActiveRewardForDiscord = this.database.prepare(`
-      SELECT * FROM reward_codes
-      WHERE discord_user_id = ? AND consumed_at IS NULL AND expires_at > ?
-      ORDER BY created_at DESC LIMIT 1
-    `);
-    this.findRewardByCode = this.database.prepare(`SELECT * FROM reward_codes WHERE code = ? LIMIT 1`);
-    this.findLastConsumedReward = this.database.prepare(`
-      SELECT * FROM reward_codes
-      WHERE discord_user_id = ? AND reward_type = ? AND consumed_at IS NOT NULL
-      ORDER BY consumed_at DESC LIMIT 1
-    `);
-    this.insertRewardCodeStatement = this.database.prepare(`
-      INSERT INTO reward_codes (
-        code, discord_user_id, roblox_user_id, reward_type, amount, created_at, expires_at,
-        reservation_token, reserved_at, consumed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)
-    `);
-    this.reserveRewardStatement = this.database.prepare(`
-      UPDATE reward_codes SET reservation_token = ?, reserved_at = ?
-      WHERE code = ? AND roblox_user_id = ? AND consumed_at IS NULL AND expires_at > ?
-        AND (reservation_token IS NULL OR reserved_at IS NULL OR reserved_at <= ?)
-    `);
-    this.commitRewardStatement = this.database.prepare(`
-      UPDATE reward_codes SET consumed_at = ?, reservation_token = NULL, reserved_at = NULL
-      WHERE code = ? AND reservation_token = ? AND consumed_at IS NULL
-    `);
-    this.releaseRewardStatement = this.database.prepare(`
-      UPDATE reward_codes SET reservation_token = NULL, reserved_at = NULL
-      WHERE code = ? AND reservation_token = ? AND consumed_at IS NULL
-    `);
-    this.deleteExpiredRewardCodes = this.database.prepare(`
-      DELETE FROM reward_codes WHERE consumed_at IS NULL AND expires_at <= ?
-    `);
-  }
-
-  assertLinkAvailable(robloxUserId, discordUserId) {
-    const existingRoblox = this.getByRobloxUserId(robloxUserId);
     if (existingRoblox && existingRoblox.discordUserId !== discordUserId) {
       const error = new Error("Esta conta do Roblox já está vinculada a outra conta do Discord.");
       error.code = "ROBLOX_ALREADY_LINKED";
       throw error;
     }
 
-    const existingDiscord = this.getByDiscordUserId(discordUserId);
-    if (existingDiscord && existingDiscord.robloxUserId !== robloxUserId) {
+    if (existingDiscord && existingDiscord.robloxUserId !== Number(robloxUserId)) {
       const error = new Error("Esta conta do Discord já está vinculada a outra conta do Roblox.");
       error.code = "DISCORD_ALREADY_LINKED";
       throw error;
     }
   }
 
-  link({ robloxUserId, discordUserId, guildId, robloxUsername }) {
-    this.assertLinkAvailable(robloxUserId, discordUserId);
+  async link({ robloxUserId, discordUserId, guildId, robloxUsername }) {
+    const numericRobloxId = Number(robloxUserId);
+    const discordId = String(discordUserId);
     const now = Date.now();
-    this.upsertLink.run(robloxUserId, discordUserId, guildId, robloxUsername, now, now);
+
+    await this.linksRef.transaction((current) => {
+      const links = current && typeof current === "object" ? current : {};
+      links.byRoblox ??= {};
+      links.byDiscord ??= {};
+
+      const existingRoblox = links.byRoblox[String(numericRobloxId)] ?? null;
+      const existingDiscord = links.byDiscord[discordId] ?? null;
+
+      if (existingRoblox && String(existingRoblox.discordUserId) !== discordId) {
+        const error = new Error("Esta conta do Roblox já está vinculada a outra conta do Discord.");
+        error.code = "ROBLOX_ALREADY_LINKED";
+        throw error;
+      }
+
+      if (existingDiscord && Number(existingDiscord.robloxUserId) !== numericRobloxId) {
+        const error = new Error("Esta conta do Discord já está vinculada a outra conta do Roblox.");
+        error.code = "DISCORD_ALREADY_LINKED";
+        throw error;
+      }
+
+      const linkedAt = Number(existingRoblox?.linkedAt ?? existingDiscord?.linkedAt ?? now);
+      const record = {
+        robloxUserId: numericRobloxId,
+        discordUserId: discordId,
+        guildId: String(guildId),
+        robloxUsername: String(robloxUsername),
+        linkedAt,
+        updatedAt: now
+      };
+
+      links.byRoblox[String(numericRobloxId)] = record;
+      links.byDiscord[discordId] = record;
+      return links;
+    });
+
+    return this.getByDiscordUserId(discordId);
   }
 
-  unlinkByDiscordUserId(discordUserId) {
-    const link = this.getByDiscordUserId(discordUserId);
+  async unlinkByDiscordUserId(discordUserId) {
+    const discordId = String(discordUserId);
+    let removed = null;
+
+    await this.linksRef.transaction((current) => {
+      if (!current?.byDiscord?.[discordId]) return current;
+
+      const links = current;
+      removed = clone(links.byDiscord[discordId]);
+      delete links.byDiscord[discordId];
+      if (removed?.robloxUserId != null) {
+        delete links.byRoblox?.[String(removed.robloxUserId)];
+      }
+      return links;
+    });
+
+    if (!removed) return null;
+    await this.profilesRef.child(String(removed.robloxUserId)).remove();
+    return normalizeLink(removed);
+  }
+
+  async getByRobloxUserId(robloxUserId) {
+    const snapshot = await this.linksRef.child(`byRoblox/${Number(robloxUserId)}`).get();
+    return normalizeLink(snapshot.val());
+  }
+
+  async getByDiscordUserId(discordUserId) {
+    const snapshot = await this.linksRef.child(`byDiscord/${String(discordUserId)}`).get();
+    return normalizeLink(snapshot.val());
+  }
+
+  async updateProfile(robloxUserId, robloxUsername) {
+    const link = await this.getByRobloxUserId(robloxUserId);
     if (!link) return null;
 
-    this.database.exec("BEGIN IMMEDIATE");
-    try {
-      this.deleteLinkByDiscord.run(discordUserId);
-      this.deleteProfile.run(link.robloxUserId);
-      this.database.exec("COMMIT");
-      return link;
-    } catch (error) {
-      this.database.exec("ROLLBACK");
-      throw error;
-    }
+    const updated = {
+      ...link,
+      robloxUsername: String(robloxUsername),
+      updatedAt: Date.now()
+    };
+
+    await this.linksRef.update({
+      [`byRoblox/${link.robloxUserId}`]: updated,
+      [`byDiscord/${link.discordUserId}`]: updated
+    });
+    return updated;
   }
 
-  getByRobloxUserId(robloxUserId) {
-    return mapLink(this.findByRoblox.get(robloxUserId));
+  async saveVerificationProfile(profile) {
+    const updatedAt = Date.now();
+    await this.profilesRef.child(String(profile.userId)).set({
+      profile: clone(profile),
+      updatedAt
+    });
+    return { profile: clone(profile), updatedAt };
   }
 
-  getByDiscordUserId(discordUserId) {
-    return mapLink(this.findByDiscord.get(discordUserId));
+  async getVerificationProfile(robloxUserId) {
+    const snapshot = await this.profilesRef.child(String(robloxUserId)).get();
+    const value = snapshot.val();
+    if (!value?.profile || typeof value.profile !== "object") return null;
+    return { profile: clone(value.profile), updatedAt: Number(value.updatedAt ?? 0) };
   }
 
-  updateProfile(robloxUserId, robloxUsername) {
-    this.touchProfile.run(robloxUsername, Date.now(), robloxUserId);
-  }
-
-  saveVerificationProfile(profile) {
-    this.saveProfileStatement.run(profile.userId, JSON.stringify(profile), Date.now());
-  }
-
-  getVerificationProfile(robloxUserId) {
-    const row = this.findProfile.get(robloxUserId);
-    if (!row) return null;
-    const profile = safeJsonParse(row.profile_json);
-    if (!profile || typeof profile !== "object") return null;
-    return { profile, updatedAt: Number(row.updated_at) };
-  }
-
-  getVerificationProfileByDiscordUserId(discordUserId) {
-    const link = this.getByDiscordUserId(discordUserId);
+  async getVerificationProfileByDiscordUserId(discordUserId) {
+    const link = await this.getByDiscordUserId(discordUserId);
     if (!link) return null;
-    const cached = this.getVerificationProfile(link.robloxUserId);
+    const cached = await this.getVerificationProfile(link.robloxUserId);
     if (!cached) return { link, profile: null, updatedAt: null };
     return { link, profile: cached.profile, updatedAt: cached.updatedAt };
   }
 
-  setGameBan({
+  async setGameBan({
     robloxUserId,
     robloxUsername,
     discordUserId = null,
@@ -368,151 +237,280 @@ export class VerificationDatabase {
     expiresAt = null,
     source = "manual"
   }) {
-    const now = Date.now();
-    const existing = this.getGameBan(robloxUserId);
-    this.upsertGameBanStatement.run(
-      robloxUserId,
-      robloxUsername,
-      discordUserId,
-      moderatorDiscordId,
-      reason,
-      existing?.bannedAt ?? now,
-      now,
-      expiresAt,
-      source
-    );
+    const userId = Number(robloxUserId);
+    const ref = this.gameBansRef.child(`byRoblox/${userId}`);
+    let previousDiscordId = null;
+
+    const result = await ref.transaction((current) => {
+      previousDiscordId = current?.discordUserId ? String(current.discordUserId) : null;
+      const now = Date.now();
+      return {
+        robloxUserId: userId,
+        robloxUsername: String(robloxUsername),
+        discordUserId: discordUserId ? String(discordUserId) : null,
+        moderatorDiscordId: String(moderatorDiscordId),
+        reason: String(reason),
+        bannedAt: Number(current?.bannedAt ?? now),
+        updatedAt: now,
+        expiresAt: expiresAt == null ? null : Number(expiresAt),
+        source: String(source || "manual")
+      };
+    });
+
+    const ban = normalizeGameBan(result.snapshot.val());
+    const updates = {};
+    if (previousDiscordId && previousDiscordId !== ban?.discordUserId) {
+      updates[`byDiscord/${previousDiscordId}`] = null;
+    }
+    if (ban?.discordUserId) {
+      updates[`byDiscord/${ban.discordUserId}`] = ban.robloxUserId;
+    }
+    if (Object.keys(updates).length > 0) await this.gameBansRef.update(updates);
+    return ban;
+  }
+
+  async purgeExpiredGameBans(now = Date.now()) {
+    const snapshot = await this.gameBansRef.child("byRoblox").get();
+    const entries = objectValues(snapshot.val());
+    const updates = {};
+    let removed = 0;
+
+    for (const [robloxId, raw] of entries) {
+      const ban = normalizeGameBan(raw);
+      if (!ban?.expiresAt || ban.expiresAt > now) continue;
+      updates[`byRoblox/${robloxId}`] = null;
+      if (ban.discordUserId) updates[`byDiscord/${ban.discordUserId}`] = null;
+      removed += 1;
+    }
+
+    if (removed > 0) await this.gameBansRef.update(updates);
+    return removed;
+  }
+
+  async getGameBan(robloxUserId) {
+    const ref = this.gameBansRef.child(`byRoblox/${Number(robloxUserId)}`);
+    const snapshot = await ref.get();
+    const ban = normalizeGameBan(snapshot.val());
+    if (!ban) return null;
+
+    if (ban.expiresAt != null && ban.expiresAt <= Date.now()) {
+      const updates = { [`byRoblox/${ban.robloxUserId}`]: null };
+      if (ban.discordUserId) updates[`byDiscord/${ban.discordUserId}`] = null;
+      await this.gameBansRef.update(updates);
+      return null;
+    }
+
+    return ban;
+  }
+
+  async getGameBanByDiscordUserId(discordUserId) {
+    const pointer = await this.gameBansRef.child(`byDiscord/${String(discordUserId)}`).get();
+    const robloxUserId = Number(pointer.val());
+    if (!Number.isSafeInteger(robloxUserId) || robloxUserId <= 0) return null;
     return this.getGameBan(robloxUserId);
   }
 
-  purgeExpiredGameBans(now = Date.now()) {
-    return Number(this.deleteExpiredGameBans.run(now).changes ?? 0);
-  }
-
-  getGameBan(robloxUserId) {
-    this.purgeExpiredGameBans();
-    return mapGameBan(this.findGameBan.get(robloxUserId));
-  }
-
-  getGameBanByDiscordUserId(discordUserId) {
-    this.purgeExpiredGameBans();
-    return mapGameBan(this.findGameBanByDiscord.get(discordUserId));
-  }
-
-  removeGameBan(robloxUserId) {
-    const existing = this.getGameBan(robloxUserId);
+  async removeGameBan(robloxUserId) {
+    const existing = await this.getGameBan(robloxUserId);
     if (!existing) return null;
-    this.deleteGameBan.run(robloxUserId);
+    const updates = { [`byRoblox/${existing.robloxUserId}`]: null };
+    if (existing.discordUserId) updates[`byDiscord/${existing.discordUserId}`] = null;
+    await this.gameBansRef.update(updates);
     return existing;
   }
 
-  countGameBans() {
-    this.purgeExpiredGameBans();
-    return Number(this.countGameBansStatement.get()?.count ?? 0);
+  async countGameBans() {
+    await this.purgeExpiredGameBans();
+    const snapshot = await this.gameBansRef.child("byRoblox").get();
+    return snapshot.numChildren();
   }
 
-  listGameBans({ limit = 6, offset = 0 } = {}) {
-    this.purgeExpiredGameBans();
-    return this.listGameBansStatement.all(limit, offset).map(mapGameBan);
+  async listGameBans({ limit = 6, offset = 0 } = {}) {
+    await this.purgeExpiredGameBans();
+    const snapshot = await this.gameBansRef.child("byRoblox").get();
+    const bans = objectValues(snapshot.val())
+      .map(([, value]) => normalizeGameBan(value))
+      .filter(Boolean)
+      .sort((a, b) => b.bannedAt - a.bannedAt);
+    return bans.slice(offset, offset + limit);
   }
 
-  addWarning({ discordUserId, moderatorDiscordId, reason }) {
-    const now = Date.now();
-    const result = this.insertWarningStatement.run(discordUserId, moderatorDiscordId, reason, now);
+  async addWarning({ discordUserId, moderatorDiscordId, reason }) {
+    const userRef = this.warningsRef.child(String(discordUserId));
+    const warningRef = userRef.push();
+    const warning = {
+      discordUserId: String(discordUserId),
+      moderatorDiscordId: String(moderatorDiscordId),
+      reason: String(reason),
+      createdAt: Date.now()
+    };
+
+    await warningRef.set(warning);
+    const snapshot = await userRef.get();
     return {
-      warning: {
-        id: Number(result.lastInsertRowid),
-        discordUserId,
-        moderatorDiscordId,
-        reason,
-        createdAt: now
-      },
-      count: this.countWarnings(discordUserId)
+      warning: normalizeWarning(warningRef.key, warning),
+      count: snapshot.numChildren()
     };
   }
 
-  countWarnings(discordUserId) {
-    return Number(this.countWarningsStatement.get(discordUserId)?.count ?? 0);
+  async countWarnings(discordUserId) {
+    const snapshot = await this.warningsRef.child(String(discordUserId)).get();
+    return snapshot.numChildren();
   }
 
-  listWarnings(discordUserId, { limit = 10, offset = 0 } = {}) {
-    return this.listWarningsStatement.all(discordUserId, limit, offset).map(mapWarning);
+  async listWarnings(discordUserId, { limit = 10, offset = 0 } = {}) {
+    const snapshot = await this.warningsRef.child(String(discordUserId)).get();
+    return objectValues(snapshot.val())
+      .map(([id, value]) => normalizeWarning(id, value))
+      .filter(Boolean)
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(offset, offset + limit);
   }
 
-  getTicket(discordUserId) {
-    return mapTicket(this.findTicketStatement.get(discordUserId));
+  async getTicket(discordUserId) {
+    const snapshot = await this.ticketsRef.child(String(discordUserId)).get();
+    return normalizeTicket(snapshot.val());
   }
 
-  openTicket(discordUserId, channelId) {
+  async openTicket(discordUserId, channelId) {
     const now = Date.now();
-    this.upsertTicketStatement.run(discordUserId, channelId, now, now);
-    return this.getTicket(discordUserId);
+    const ticket = {
+      discordUserId: String(discordUserId),
+      channelId: String(channelId),
+      openedAt: now,
+      closedAt: null,
+      updatedAt: now
+    };
+    await this.ticketsRef.child(String(discordUserId)).set(ticket);
+    return ticket;
   }
 
-  closeTicket(discordUserId) {
+  async closeTicket(discordUserId) {
+    const ref = this.ticketsRef.child(String(discordUserId));
+    const current = normalizeTicket((await ref.get()).val());
+    if (!current) return null;
     const now = Date.now();
-    this.closeTicketStatement.run(now, now, discordUserId);
-    return this.getTicket(discordUserId);
+    const ticket = { ...current, channelId: null, closedAt: now, updatedAt: now };
+    await ref.set(ticket);
+    return ticket;
   }
 
-  cleanupRewards(now = Date.now()) {
-    this.deleteExpiredRewardCodes.run(now);
+  async cleanupRewards(now = Date.now()) {
+    const snapshot = await this.rewardsRef.child("codes").get();
+    const updates = {};
+
+    for (const [code, raw] of objectValues(snapshot.val())) {
+      const reward = normalizeReward(raw);
+      if (!reward || reward.consumedAt || reward.expiresAt > now) continue;
+      updates[`codes/${code}`] = null;
+      updates[`byDiscord/${reward.discordUserId}/${code}`] = null;
+    }
+
+    if (Object.keys(updates).length > 0) await this.rewardsRef.update(updates);
   }
 
-  getActiveRewardForDiscord(discordUserId) {
+  async getActiveRewardForDiscord(discordUserId) {
     const now = Date.now();
-    this.cleanupRewards(now);
-    return mapRewardCode(this.findActiveRewardForDiscord.get(discordUserId, now));
+    const snapshot = await this.rewardsRef.child(`byDiscord/${String(discordUserId)}`).get();
+    const rewards = objectValues(snapshot.val())
+      .map(([, value]) => normalizeReward(value))
+      .filter((reward) => reward && !reward.consumedAt && reward.expiresAt > now)
+      .sort((a, b) => b.createdAt - a.createdAt);
+    return rewards[0] ?? null;
   }
 
-  getRewardByCode(code) {
-    return mapRewardCode(this.findRewardByCode.get(code));
+  async getRewardByCode(code) {
+    const snapshot = await this.rewardsRef.child(`codes/${String(code)}`).get();
+    return normalizeReward(snapshot.val());
   }
 
-  getLastConsumedReward(discordUserId, rewardType) {
-    return mapRewardCode(this.findLastConsumedReward.get(discordUserId, rewardType));
+  async getLastConsumedReward(discordUserId, rewardType) {
+    const snapshot = await this.rewardsRef.child(`byDiscord/${String(discordUserId)}`).get();
+    const rewards = objectValues(snapshot.val())
+      .map(([, value]) => normalizeReward(value))
+      .filter((reward) => reward && reward.rewardType === rewardType && reward.consumedAt)
+      .sort((a, b) => b.consumedAt - a.consumedAt);
+    return rewards[0] ?? null;
   }
 
-  createRewardCode({ code, discordUserId, robloxUserId, rewardType, amount, expiresAt }) {
-    const now = Date.now();
-    this.insertRewardCodeStatement.run(
-      code,
-      discordUserId,
-      robloxUserId,
-      rewardType,
-      amount,
-      now,
-      expiresAt
-    );
-    return this.getRewardByCode(code);
+  async createRewardCode({ code, discordUserId, robloxUserId, rewardType, amount, expiresAt }) {
+    const reward = {
+      code: String(code),
+      discordUserId: String(discordUserId),
+      robloxUserId: Number(robloxUserId),
+      rewardType: String(rewardType),
+      amount: Number(amount),
+      createdAt: Date.now(),
+      expiresAt: Number(expiresAt),
+      reservationToken: null,
+      reservedAt: null,
+      consumedAt: null
+    };
+
+    const updates = {
+      [`codes/${reward.code}`]: reward,
+      [`byDiscord/${reward.discordUserId}/${reward.code}`]: reward
+    };
+    await this.rewardsRef.update(updates);
+    return reward;
   }
 
-  reserveRewardCode({ code, robloxUserId, reservationToken, reservationTtlMs }) {
+  async syncRewardIndex(reward) {
+    if (!reward) return;
+    await this.rewardsRef.child(`byDiscord/${reward.discordUserId}/${reward.code}`).set(reward);
+  }
+
+  async reserveRewardCode({ code, robloxUserId, reservationToken, reservationTtlMs }) {
     const now = Date.now();
     const staleBefore = now - reservationTtlMs;
-    const result = this.reserveRewardStatement.run(
-      reservationToken,
-      now,
-      code,
-      robloxUserId,
-      now,
-      staleBefore
-    );
-    if (Number(result.changes ?? 0) === 0) return null;
-    return this.getRewardByCode(code);
+    const ref = this.rewardsRef.child(`codes/${String(code)}`);
+    const result = await ref.transaction((current) => {
+      const reward = normalizeReward(current);
+      if (!reward) return;
+      if (reward.robloxUserId !== Number(robloxUserId)) return;
+      if (reward.consumedAt || reward.expiresAt <= now) return;
+      if (reward.reservationToken && reward.reservedAt && reward.reservedAt > staleBefore) return;
+      return { ...reward, reservationToken: String(reservationToken), reservedAt: now };
+    });
+
+    if (!result.committed) return null;
+    const reward = normalizeReward(result.snapshot.val());
+    await this.syncRewardIndex(reward);
+    return reward;
   }
 
-  commitRewardCode({ code, reservationToken }) {
+  async commitRewardCode({ code, reservationToken }) {
+    const ref = this.rewardsRef.child(`codes/${String(code)}`);
     const now = Date.now();
-    const result = this.commitRewardStatement.run(now, code, reservationToken);
-    if (Number(result.changes ?? 0) === 0) return null;
-    return this.getRewardByCode(code);
+    const result = await ref.transaction((current) => {
+      const reward = normalizeReward(current);
+      if (!reward || reward.consumedAt) return;
+      if (reward.reservationToken !== String(reservationToken)) return;
+      return { ...reward, consumedAt: now, reservationToken: null, reservedAt: null };
+    });
+
+    if (!result.committed) return null;
+    const reward = normalizeReward(result.snapshot.val());
+    await this.syncRewardIndex(reward);
+    return reward;
   }
 
-  releaseRewardCode({ code, reservationToken }) {
-    this.releaseRewardStatement.run(code, reservationToken);
+  async releaseRewardCode({ code, reservationToken }) {
+    const ref = this.rewardsRef.child(`codes/${String(code)}`);
+    const result = await ref.transaction((current) => {
+      const reward = normalizeReward(current);
+      if (!reward || reward.consumedAt) return;
+      if (reward.reservationToken !== String(reservationToken)) return;
+      return { ...reward, reservationToken: null, reservedAt: null };
+    });
+
+    if (!result.committed) return false;
+    const reward = normalizeReward(result.snapshot.val());
+    await this.syncRewardIndex(reward);
+    return true;
   }
 
-  close() {
-    if (this.database.isOpen) this.database.close();
+  async close() {
+    // Firebase Admin owns the socket lifecycle; the app is closed by server.js.
   }
 }

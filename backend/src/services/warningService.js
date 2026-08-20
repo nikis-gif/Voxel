@@ -13,8 +13,8 @@ export class WarningService {
     this.gameBanService = gameBanService;
   }
 
-  register({ discordUserId, moderatorDiscordId, reason }) {
-    const result = this.database.addWarning({
+  async register({ discordUserId, moderatorDiscordId, reason }) {
+    const result = await this.database.addWarning({
       discordUserId,
       moderatorDiscordId,
       reason: cleanReason(reason)
@@ -35,7 +35,7 @@ export class WarningService {
     };
   }
 
-  applyGameEscalation({ discordUserId, moderatorDiscordId, reason, durationMs }) {
+  async applyGameEscalation({ discordUserId, moderatorDiscordId, reason, durationMs }) {
     return this.gameBanService.ban({
       discordUserId,
       moderatorDiscordId,

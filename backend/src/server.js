@@ -3,8 +3,9 @@ import { createServer } from "node:http";
 import { loadEnvFile } from "node:process";
 import { connectDiscordClient, createDiscordClient } from "./bot/discordClient.js";
 import { createApp } from "./app.js";
+import { closeFirebaseContext, createFirebaseContext } from "./config/firebase.js";
 import { loadEnv } from "./config/env.js";
-import { ContentModerationService } from "./services/contentModerationService.js";
+import { SupportSafetyService } from "./services/supportSafetyService.js";
 import { registerDiscordDmCommands } from "./services/discordDmCommandService.js";
 import { DiscordGuildCommandService } from "./services/discordGuildCommandService.js";
 import { DiscordRoleSyncService } from "./services/discordRoleSyncService.js";
@@ -22,12 +23,15 @@ import { WarningService } from "./services/warningService.js";
 if (existsSync(".env")) loadEnvFile(".env");
 
 const env = loadEnv();
+const firebase = createFirebaseContext(env.firebase);
+const verificationDatabase = new VerificationDatabase(firebase.database);
+await verificationDatabase.init();
+
 const discordClient = createDiscordClient();
-const verificationCodeStore = new VerificationCodeStore();
-const contentModerationService = new ContentModerationService(env.supportModeration);
-const supportAbuseService = new SupportAbuseService();
+const verificationCodeStore = new VerificationCodeStore({ database: firebase.database });
+const supportSafetyService = new SupportSafetyService();
+const supportAbuseService = new SupportAbuseService({ database: firebase.database });
 const gameBridgeService = new GameBridgeService();
-let verificationDatabase = null;
 let discordVerificationService = null;
 let gameBanService = null;
 let rewardService = null;
@@ -36,14 +40,10 @@ let discordGuildCommandService = null;
 registerDiscordDmCommands(discordClient, env.supportOwnerId);
 const discordSupportService = new DiscordSupportService(discordClient, env.supportOwnerId);
 
-if (contentModerationService.enabled) {
-  console.log("[moderation] Support text and image moderation enabled.");
-} else {
-  console.warn("[moderation] Disabled. Configure OPENAI_API_KEY to block unsafe support content.");
-}
+console.log("[safety] Local support safeguards enabled. External AI moderation is disabled.");
+console.log(`[firebase] Realtime Database connected: ${firebase.projectId}.`);
 
 if (env.verification.enabled) {
-  verificationDatabase = new VerificationDatabase(env.verification.databasePath);
   const roleSyncService = new DiscordRoleSyncService({
     guildId: env.verification.guildId,
     roleIds: env.verification.roleIds
@@ -80,7 +80,7 @@ if (env.verification.enabled) {
   });
   discordGuildCommandService.init();
 
-  console.log(`[verification] Persistent links database: ${env.verification.databasePath}`);
+  console.log("[verification] Persistent storage: Firebase Realtime Database.");
 } else {
   console.warn("[verification] Disabled. Configure ROBLOX_API_KEY and EB_GUILD_ID to enable it.");
 }
@@ -89,7 +89,7 @@ const app = createApp({
   env,
   discordClient,
   discordSupportService,
-  contentModerationService,
+  supportSafetyService,
   supportAbuseService,
   verificationCodeStore,
   discordVerificationService,
@@ -115,8 +115,9 @@ connectDiscordClient(discordClient, env.discordBotToken)
 function shutdown(signal) {
   console.log(`${signal} received. Shutting down...`);
   server.close(async () => {
-    verificationDatabase?.close();
+    await verificationDatabase.close();
     await discordClient.destroy().catch(() => {});
+    await closeFirebaseContext(firebase);
     process.exit(0);
   });
   setTimeout(() => process.exit(1), 10_000).unref();

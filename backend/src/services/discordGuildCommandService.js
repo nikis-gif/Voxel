@@ -347,7 +347,7 @@ export class DiscordGuildCommandService {
   }
 
   async handleGroups(interaction) {
-    const cached = this.verificationService.getLinkedProfile(interaction.user.id);
+    const cached = await this.verificationService.getLinkedProfile(interaction.user.id);
     if (!cached?.link) {
       await interaction.reply({
         flags: MessageFlags.Ephemeral,
@@ -458,7 +458,7 @@ export class DiscordGuildCommandService {
 
     const member = await interaction.guild.members.fetch(target.id);
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const result = this.warningService.register({
+    const result = await this.warningService.register({
       discordUserId: target.id,
       moderatorDiscordId: interaction.user.id,
       reason
@@ -472,7 +472,7 @@ export class DiscordGuildCommandService {
       sanction = `Timeout automático de **${result.escalation.label}** aplicado.`;
     } else if (result.escalation?.type === "game-ban") {
       try {
-        const ban = this.warningService.applyGameEscalation({
+        const ban = await this.warningService.applyGameEscalation({
           discordUserId: target.id,
           moderatorDiscordId: interaction.user.id,
           reason,
@@ -544,7 +544,7 @@ export class DiscordGuildCommandService {
       throw new Error(`A recompensa fica disponível após 1 hora no servidor. Tente novamente <t:${Math.floor(availableAt / 1000)}:R>.`);
     }
 
-    const { reward, reused } = this.rewardService.issuePoints(interaction.user.id);
+    const { reward, reused } = await this.rewardService.issuePoints(interaction.user.id);
     await interaction.update({
       embeds: [baseEmbed(this.client, "Código de Points", `Use o código abaixo no jogo para receber **${reward.amount} Points**.\n\n## \`${reward.code}\``)
         .addFields(
@@ -559,7 +559,7 @@ export class DiscordGuildCommandService {
   async handleChangeRankGame(interaction) {
     assertAdministrator(interaction);
     const target = interaction.options.getUser("usuario", true);
-    const link = this.verificationService.getLinkedProfile(target.id)?.link;
+    const link = (await this.verificationService.getLinkedProfile(target.id))?.link;
     if (!link) throw new Error("O usuário selecionado ainda não está verificado no Voxel.");
 
     const communityName = interaction.options.getString("comunidade", true).trim();
@@ -755,7 +755,7 @@ export class DiscordGuildCommandService {
     const reason = cleanReason(interaction.options.getString("motivo"));
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const ban = this.gameBanService.ban({
+    const ban = await this.gameBanService.ban({
       ...target,
       moderatorDiscordId: interaction.user.id,
       reason
@@ -783,7 +783,7 @@ export class DiscordGuildCommandService {
     const reason = cleanReason(interaction.options.getString("motivo"));
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const removed = this.gameBanService.unban({
+    const removed = await this.gameBanService.unban({
       ...target,
       moderatorDiscordId: interaction.user.id,
       reason
@@ -801,7 +801,7 @@ export class DiscordGuildCommandService {
 
   async handleBanlistGame(interaction, page) {
     assertAdministrator(interaction);
-    const result = this.gameBanService.list(page, PAGE_SIZE);
+    const result = await this.gameBanService.list(page, PAGE_SIZE);
 
     const description = result.items.length > 0
       ? result.items.map((ban, index) => {

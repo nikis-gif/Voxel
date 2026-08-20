@@ -1,8 +1,8 @@
 export function createGameAccessController(gameBanService) {
   return {
-    check(req, res, next) {
+    async check(req, res, next) {
       try {
-        const result = gameBanService.getStatus(req.body?.userId);
+        const result = await gameBanService.getStatus(req.body?.userId);
 
         res.status(200).json({
           success: true,

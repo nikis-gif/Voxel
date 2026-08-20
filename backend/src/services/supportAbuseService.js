@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 
+const ROOT_PATH = "voxel/v1/support/duplicateFingerprints";
 const DUPLICATE_TTL_MS = 30 * 60 * 1000;
-const MAX_CACHE_ENTRIES = 2_000;
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
 function hash(value) {
   return createHash("sha256").update(value).digest("hex");
@@ -13,41 +14,47 @@ function requestFingerprint({ sender, message, files }) {
 }
 
 export class SupportAbuseService {
-  constructor() {
-    this.recent = new Map();
+  constructor({ database }) {
+    this.ref = database.ref(ROOT_PATH);
+    this.lastCleanupAt = 0;
   }
 
-  prune(now = Date.now()) {
-    for (const [key, createdAt] of this.recent) {
-      if (now - createdAt >= DUPLICATE_TTL_MS) this.recent.delete(key);
-    }
+  async cleanup(now = Date.now()) {
+    if (now - this.lastCleanupAt < CLEANUP_INTERVAL_MS) return;
+    this.lastCleanupAt = now;
 
-    while (this.recent.size > MAX_CACHE_ENTRIES) {
-      const oldest = this.recent.keys().next().value;
-      if (!oldest) break;
-      this.recent.delete(oldest);
-    }
+    const snapshot = await this.ref.get();
+    const updates = {};
+    snapshot.forEach((child) => {
+      const createdAt = Number(child.val() ?? 0);
+      if (!createdAt || now - createdAt >= DUPLICATE_TTL_MS) updates[child.key] = null;
+    });
+
+    if (Object.keys(updates).length > 0) await this.ref.update(updates);
   }
 
-  reserve(payload) {
+  async reserve(payload) {
     const now = Date.now();
-    this.prune(now);
-
+    await this.cleanup(now);
     const fingerprint = requestFingerprint(payload);
-    const previous = this.recent.get(fingerprint);
-    if (previous && now - previous < DUPLICATE_TTL_MS) {
+    const result = await this.ref.child(fingerprint).transaction((current) => {
+      const previous = Number(current ?? 0);
+      if (previous > 0 && now - previous < DUPLICATE_TTL_MS) return;
+      return now;
+    });
+
+    if (!result.committed) {
       const error = new Error("Uma solicitação idêntica já foi recebida recentemente.");
       error.statusCode = 409;
       error.code = "DUPLICATE_SUPPORT_REQUEST";
       throw error;
     }
 
-    this.recent.set(fingerprint, now);
     return fingerprint;
   }
 
-  release(fingerprint) {
+  async release(fingerprint) {
     if (!fingerprint) return;
-    this.recent.delete(fingerprint);
+    await this.ref.child(fingerprint).remove();
   }
 }

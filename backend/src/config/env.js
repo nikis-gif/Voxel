@@ -31,16 +31,6 @@ function parseTrustProxy(value) {
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : false;
 }
 
-function resolveVerificationDatabasePath() {
-  const explicitPath = optionalEnv("VERIFICATION_DB_PATH");
-  if (explicitPath) return explicitPath;
-
-  const volumePath = optionalEnv("RAILWAY_VOLUME_MOUNT_PATH");
-  if (volumePath) return `${volumePath.replace(/\/$/, "")}/voxel-verification.sqlite`;
-
-  return "./data/voxel-verification.sqlite";
-}
-
 function parseRoleIds(value) {
   if (!value) return {};
 
@@ -70,8 +60,6 @@ export function loadEnv() {
     throw new Error("ROBLOX_API_KEY and EB_GUILD_ID must be configured together");
   }
 
-  const openAiApiKey = optionalEnv("OPENAI_API_KEY");
-
   return Object.freeze({
     port: parsePort(process.env.PORT),
     nodeEnv: process.env.NODE_ENV?.trim() || "development",
@@ -79,17 +67,15 @@ export function loadEnv() {
     supportOwnerId: requireEnv("SUPPORT_OWNER_ID"),
     allowedOrigins,
     trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
-    supportModeration: Object.freeze({
-      enabled: Boolean(openAiApiKey),
-      apiKey: openAiApiKey,
-      model: "omni-moderation-latest"
+    firebase: Object.freeze({
+      databaseUrl: requireEnv("FIREBASE_DATABASE_URL").replace(/\/$/, ""),
+      serviceAccountJson: requireEnv("FIREBASE_SERVICE_ACCOUNT_JSON")
     }),
     verification: Object.freeze({
       enabled: Boolean(robloxApiKey && ebGuildId),
       robloxApiKey,
       guildId: ebGuildId,
-      roleIds: Object.freeze(parseRoleIds(process.env.EB_ROLE_IDS)),
-      databasePath: resolveVerificationDatabasePath()
+      roleIds: Object.freeze(parseRoleIds(process.env.EB_ROLE_IDS))
     })
   });
 }

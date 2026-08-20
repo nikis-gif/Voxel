@@ -112,10 +112,10 @@ function sanitizeProfile(body) {
 
 export function createVerificationController(codeStore, discordVerificationService) {
   return {
-    generateCode(req, res, next) {
+    async generateCode(req, res, next) {
       try {
         const profile = sanitizeProfile(req.body);
-        const generated = codeStore.generate(profile);
+        const generated = await codeStore.generate(profile);
 
         res.status(201).json({
           success: true,

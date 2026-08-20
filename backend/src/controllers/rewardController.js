@@ -5,7 +5,7 @@ function validUserId(value) {
 
 export function createRewardController(rewardService) {
   return Object.freeze({
-    reserve(req, res, next) {
+    async reserve(req, res, next) {
       try {
         const userId = validUserId(req.body?.userId);
         if (!userId) {
@@ -13,16 +13,16 @@ export function createRewardController(rewardService) {
           return;
         }
 
-        const data = rewardService.reserve({ code: req.body?.code, robloxUserId: userId });
+        const data = await rewardService.reserve({ code: req.body?.code, robloxUserId: userId });
         res.json({ success: true, data });
       } catch (error) {
         next(error);
       }
     },
 
-    commit(req, res, next) {
+    async commit(req, res, next) {
       try {
-        const data = rewardService.commit({
+        const data = await rewardService.commit({
           code: req.body?.code,
           reservationToken: req.body?.reservationToken
         });
@@ -32,9 +32,9 @@ export function createRewardController(rewardService) {
       }
     },
 
-    release(req, res, next) {
+    async release(req, res, next) {
       try {
-        rewardService.release({
+        await rewardService.release({
           code: req.body?.code,
           reservationToken: req.body?.reservationToken
         });

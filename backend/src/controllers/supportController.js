@@ -3,7 +3,7 @@ import { isSupportedImageBuffer, normalizeMultiline, normalizeSingleLine } from 
 
 export function createSupportController({
   discordSupportService,
-  contentModerationService,
+  supportSafetyService,
   supportAbuseService
 }) {
   return async function submitSupport(req, res, next) {
@@ -37,9 +37,9 @@ export function createSupportController({
       }
 
       const ticketPayload = { sender, message, files };
-      abuseReservation = supportAbuseService?.reserve(ticketPayload) ?? null;
+      abuseReservation = await supportAbuseService?.reserve(ticketPayload) ?? null;
 
-      await contentModerationService?.assertSupportAllowed(ticketPayload);
+      await supportSafetyService?.assertSupportAllowed(ticketPayload);
 
       const ticketId = randomUUID().split("-")[0].toUpperCase();
       const result = await discordSupportService.sendTicket({
@@ -65,9 +65,9 @@ export function createSupportController({
     } catch (error) {
       next(error);
     } finally {
-      // Failed moderation/network attempts must not poison the 30-minute duplicate cache.
+      // Failed safety/network attempts must not poison the 30-minute duplicate cache.
       if (!delivered && abuseReservation) {
-        supportAbuseService?.release(abuseReservation);
+        await supportAbuseService?.release(abuseReservation);
       }
     }
   };

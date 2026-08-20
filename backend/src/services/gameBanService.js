@@ -18,7 +18,7 @@ export class GameBanService {
     this.database = database;
   }
 
-  resolveTarget({ discordUserId = null, robloxUserId = null }) {
+  async resolveTarget({ discordUserId = null, robloxUserId = null }) {
     if (discordUserId && robloxUserId) {
       const error = new Error("Informe apenas um alvo: usuário do Discord ou Roblox User ID.");
       error.code = "MULTIPLE_GAME_BAN_TARGETS";
@@ -26,9 +26,9 @@ export class GameBanService {
     }
 
     if (discordUserId) {
-      const link = this.database.getByDiscordUserId(discordUserId);
+      const link = await this.database.getByDiscordUserId(discordUserId);
       if (!link) {
-        const existingBan = this.database.getGameBanByDiscordUserId(discordUserId);
+        const existingBan = await this.database.getGameBanByDiscordUserId(discordUserId);
         if (existingBan) {
           return {
             robloxUserId: existingBan.robloxUserId,
@@ -51,7 +51,7 @@ export class GameBanService {
 
     const parsedUserId = parseRobloxUserId(robloxUserId);
     if (parsedUserId) {
-      const link = this.database.getByRobloxUserId(parsedUserId);
+      const link = await this.database.getByRobloxUserId(parsedUserId);
       return {
         robloxUserId: parsedUserId,
         robloxUsername: link?.robloxUsername ?? `Roblox ${parsedUserId}`,
@@ -64,7 +64,7 @@ export class GameBanService {
     throw error;
   }
 
-  ban({
+  async ban({
     discordUserId = null,
     robloxUserId = null,
     moderatorDiscordId,
@@ -72,15 +72,15 @@ export class GameBanService {
     durationMs = null,
     source = "manual"
   }) {
-    const target = this.resolveTarget({ discordUserId, robloxUserId });
-    const existing = this.database.getGameBan(target.robloxUserId);
+    const target = await this.resolveTarget({ discordUserId, robloxUserId });
+    const existing = await this.database.getGameBan(target.robloxUserId);
 
     if (existing && existing.expiresAt == null && durationMs != null) {
       return existing;
     }
 
     const expiresAt = durationMs == null ? null : Date.now() + Math.max(1, durationMs);
-    const ban = this.database.setGameBan({
+    const ban = await this.database.setGameBan({
       ...target,
       moderatorDiscordId,
       reason: cleanReason(reason),
@@ -95,19 +95,19 @@ export class GameBanService {
     return ban;
   }
 
-  unban({ discordUserId = null, robloxUserId = null, moderatorDiscordId }) {
+  async unban({ discordUserId = null, robloxUserId = null, moderatorDiscordId }) {
     let target;
 
     if (discordUserId && !robloxUserId) {
-      const existingBan = this.database.getGameBanByDiscordUserId(discordUserId);
+      const existingBan = await this.database.getGameBanByDiscordUserId(discordUserId);
       target = existingBan
         ? { robloxUserId: existingBan.robloxUserId }
-        : this.resolveTarget({ discordUserId });
+        : await this.resolveTarget({ discordUserId });
     } else {
-      target = this.resolveTarget({ discordUserId, robloxUserId });
+      target = await this.resolveTarget({ discordUserId, robloxUserId });
     }
 
-    const removed = this.database.removeGameBan(target.robloxUserId);
+    const removed = await this.database.removeGameBan(target.robloxUserId);
     if (!removed) {
       const error = new Error("Essa conta não possui um banimento ativo no jogo.");
       error.code = "GAME_BAN_NOT_FOUND";
@@ -121,7 +121,7 @@ export class GameBanService {
     return removed;
   }
 
-  getStatus(robloxUserId) {
+  async getStatus(robloxUserId) {
     const parsedUserId = parseRobloxUserId(robloxUserId);
     if (!parsedUserId) {
       const error = new Error("Invalid Roblox user id");
@@ -129,17 +129,17 @@ export class GameBanService {
       throw error;
     }
 
-    const ban = this.database.getGameBan(parsedUserId);
+    const ban = await this.database.getGameBan(parsedUserId);
     return { banned: Boolean(ban), ban };
   }
 
-  list(page, pageSize = 6) {
-    const count = this.database.countGameBans();
+  async list(page, pageSize = 6) {
+    const count = await this.database.countGameBans();
     const totalPages = Math.max(1, Math.ceil(count / pageSize));
     const safePage = Math.min(Math.max(0, page), totalPages - 1);
 
     return {
-      items: this.database.listGameBans({ limit: pageSize, offset: safePage * pageSize }),
+      items: await this.database.listGameBans({ limit: pageSize, offset: safePage * pageSize }),
       count,
       page: safePage,
       totalPages

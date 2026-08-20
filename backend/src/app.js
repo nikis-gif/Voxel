@@ -13,7 +13,7 @@ export function createApp({
   env,
   discordClient,
   discordSupportService,
-  contentModerationService,
+  supportSafetyService,
   supportAbuseService,
   verificationCodeStore,
   discordVerificationService,
@@ -47,7 +47,7 @@ export function createApp({
   app.use("/health", createHealthRouter(discordClient));
   app.use("/api/support", createSupportRouter({
     discordSupportService,
-    contentModerationService,
+    supportSafetyService,
     supportAbuseService
   }));
 

@@ -71,11 +71,11 @@ export class TicketService {
   }
 
   async open(guild, member) {
-    const stored = this.database.getTicket(member.id);
+    const stored = await this.database.getTicket(member.id);
     if (stored?.channelId) {
       const channel = await guild.channels.fetch(stored.channelId).catch(() => null);
       if (channel) return { channel, existing: true };
-      this.database.closeTicket(member.id);
+      await this.database.closeTicket(member.id);
     }
 
     if (stored?.openedAt) {
@@ -137,7 +137,7 @@ export class TicketService {
       reason: `Voxel ticket opened by ${member.user.tag} (${member.id})`
     });
 
-    this.database.openTicket(member.id, channel.id);
+    await this.database.openTicket(member.id, channel.id);
 
     const embed = new EmbedBuilder()
       .setColor(EB_VERIFICATION_CONFIG.color)
@@ -171,7 +171,7 @@ export class TicketService {
       throw error;
     }
 
-    this.database.closeTicket(ownerId);
+    await this.database.closeTicket(ownerId);
     const channel = interaction.channel;
     if (!channel) return;
 

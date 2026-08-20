@@ -5,13 +5,13 @@ import { supportUpload } from "../middleware/upload.js";
 
 export function createSupportRouter({
   discordSupportService,
-  contentModerationService,
+  supportSafetyService,
   supportAbuseService
 }) {
   const router = Router();
   const submitSupport = createSupportController({
     discordSupportService,
-    contentModerationService,
+    supportSafetyService,
     supportAbuseService
   });
 

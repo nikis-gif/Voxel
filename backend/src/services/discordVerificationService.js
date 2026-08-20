@@ -108,12 +108,12 @@ export class DiscordVerificationService {
     return true;
   }
 
-  getLinkedProfile(discordUserId) {
+  async getLinkedProfile(discordUserId) {
     return this.database.getVerificationProfileByDiscordUserId(discordUserId);
   }
 
   async unverify(member) {
-    const link = this.database.getByDiscordUserId(member.id);
+    const link = await this.database.getByDiscordUserId(member.id);
     if (!link) {
       return {
         unlinked: false,
@@ -123,7 +123,7 @@ export class DiscordVerificationService {
     }
 
     const roleResult = await this.roleSyncService.resetToCivil(member);
-    this.database.unlinkByDiscordUserId(member.id);
+    await this.database.unlinkByDiscordUserId(member.id);
 
     console.log(
       `[verification] Discord ${member.id} unlinked from Roblox ${link.robloxUserId} (${link.robloxUsername}).`
@@ -137,12 +137,12 @@ export class DiscordVerificationService {
   }
 
   async syncRobloxProfile(profile) {
-    const link = this.database.getByRobloxUserId(profile.userId);
+    const link = await this.database.getByRobloxUserId(profile.userId);
     if (!link || link.guildId !== this.guildId) {
       return { linked: false, synced: false };
     }
 
-    this.database.saveVerificationProfile(profile);
+    await this.database.saveVerificationProfile(profile);
 
     if (!this.client.isReady()) {
       const error = new Error("O Discord ainda está conectando. Tente novamente em alguns segundos.");
@@ -162,7 +162,7 @@ export class DiscordVerificationService {
     }
 
     const roleResult = await this.roleSyncService.sync(member, profile);
-    this.database.updateProfile(profile.userId, profile.username);
+    await this.database.updateProfile(profile.userId, profile.username);
 
     console.log(
       `[verification] Auto-synced Discord ${link.discordUserId} from Roblox ${profile.userId} (${profile.username}).`
@@ -198,7 +198,7 @@ export class DiscordVerificationService {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const code = interaction.options.getString("codigo", true);
-    const claim = this.codeStore.claim(code);
+    const claim = await this.codeStore.claim(code);
     if (!claim) {
       await interaction.editReply({
         embeds: [buildErrorEmbed(
@@ -211,19 +211,19 @@ export class DiscordVerificationService {
     }
 
     try {
-      this.database.assertLinkAvailable(claim.profile.userId, interaction.user.id);
+      await this.database.assertLinkAvailable(claim.profile.userId, interaction.user.id);
 
       const member = await interaction.guild.members.fetch(interaction.user.id);
       const roleResult = await this.roleSyncService.sync(member, claim.profile);
 
-      this.database.link({
+      await this.database.link({
         robloxUserId: claim.profile.userId,
         discordUserId: interaction.user.id,
         guildId: this.guildId,
         robloxUsername: claim.profile.username
       });
-      this.database.saveVerificationProfile(claim.profile);
-      this.codeStore.commit(claim);
+      await this.database.saveVerificationProfile(claim.profile);
+      await this.codeStore.commit(claim);
 
       await interaction.editReply({
         embeds: [buildSuccessEmbed(claim.profile, roleResult, botAvatar)]
@@ -233,7 +233,7 @@ export class DiscordVerificationService {
         `[verification] Discord ${interaction.user.id} linked to Roblox ${claim.profile.userId} (${claim.profile.username}).`
       );
     } catch (error) {
-      this.codeStore.release(claim);
+      await this.codeStore.release(claim);
       console.error(`[verification] Failed to sync roles for ${interaction.user.id}:`, error);
 
       const isLinkConflict = error?.code === "ROBLOX_ALREADY_LINKED"

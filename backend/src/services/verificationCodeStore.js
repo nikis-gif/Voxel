@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { EB_VERIFICATION_CONFIG } from "../config/ebVerificationConfig.js";
 
+const ROOT_PATH = "voxel/v1/verification";
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CLAIM_TTL_MS = 60_000;
 
@@ -27,39 +28,25 @@ function createRawCode(length) {
 
 export class VerificationCodeStore {
   constructor({
+    database,
     ttlSeconds = EB_VERIFICATION_CONFIG.codeTtlSeconds,
     generationCooldownSeconds = EB_VERIFICATION_CONFIG.codeGenerationCooldownSeconds
-  } = {}) {
+  }) {
+    this.root = database.ref(ROOT_PATH);
+    this.codesRef = this.root.child("codes");
+    this.codeStateRef = this.root.child("codeState");
     this.ttlMs = ttlSeconds * 1000;
     this.generationCooldownMs = generationCooldownSeconds * 1000;
-    this.records = new Map();
-    this.codeByRobloxUserId = new Map();
-    this.lastGeneratedAt = new Map();
   }
 
-  cleanup(now = Date.now()) {
-    for (const [code, record] of this.records) {
-      const claimExpired = record.claimedAt && now - record.claimedAt > CLAIM_TTL_MS;
-      if (claimExpired) {
-        record.claimId = null;
-        record.claimedAt = null;
-      }
-
-      if (record.expiresAt <= now) {
-        this.records.delete(code);
-        if (this.codeByRobloxUserId.get(record.profile.userId) === code) {
-          this.codeByRobloxUserId.delete(record.profile.userId);
-        }
-      }
-    }
-  }
-
-  generate(profile) {
+  async generate(profile) {
+    const userId = String(profile.userId);
+    const stateRef = this.codeStateRef.child(userId);
     const now = Date.now();
-    this.cleanup(now);
+    const state = (await stateRef.get()).val() ?? {};
+    const lastGeneratedAt = Number(state.lastGeneratedAt ?? 0);
+    const retryAfterMs = this.generationCooldownMs - (now - lastGeneratedAt);
 
-    const lastGenerated = this.lastGeneratedAt.get(profile.userId) ?? 0;
-    const retryAfterMs = this.generationCooldownMs - (now - lastGenerated);
     if (retryAfterMs > 0) {
       const error = new Error("Aguarde alguns segundos antes de gerar outro código.");
       error.statusCode = 429;
@@ -67,13 +54,21 @@ export class VerificationCodeStore {
       throw error;
     }
 
-    const previousCode = this.codeByRobloxUserId.get(profile.userId);
-    if (previousCode) this.records.delete(previousCode);
-
+    const previousCode = typeof state.code === "string" ? state.code : null;
     let rawCode;
-    do {
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
       rawCode = createRawCode(EB_VERIFICATION_CONFIG.codeLength);
-    } while (this.records.has(rawCode));
+      const snapshot = await this.codesRef.child(rawCode).get();
+      if (!snapshot.exists()) break;
+      rawCode = null;
+    }
+
+    if (!rawCode) {
+      const error = new Error("Não foi possível gerar um código único agora. Tente novamente.");
+      error.statusCode = 503;
+      throw error;
+    }
 
     const record = {
       profile: structuredClone(profile),
@@ -83,9 +78,16 @@ export class VerificationCodeStore {
       claimedAt: null
     };
 
-    this.records.set(rawCode, record);
-    this.codeByRobloxUserId.set(profile.userId, rawCode);
-    this.lastGeneratedAt.set(profile.userId, now);
+    const updates = {
+      [`codes/${rawCode}`]: record,
+      [`codeState/${userId}`]: {
+        code: rawCode,
+        lastGeneratedAt: now
+      }
+    };
+    if (previousCode && previousCode !== rawCode) updates[`codes/${previousCode}`] = null;
+
+    await this.root.update(updates);
 
     return {
       code: formatCode(rawCode),
@@ -94,43 +96,69 @@ export class VerificationCodeStore {
     };
   }
 
-  claim(codeInput) {
-    const now = Date.now();
-    this.cleanup(now);
-
+  async claim(codeInput) {
     const code = normalizeCode(codeInput);
-    const record = this.records.get(code);
-    if (!record || record.expiresAt <= now || record.claimId) return null;
+    if (!code) return null;
 
+    const now = Date.now();
     const claimId = randomUUID();
-    record.claimId = claimId;
-    record.claimedAt = now;
+    const ref = this.codesRef.child(code);
+    const result = await ref.transaction((current) => {
+      if (!current || typeof current !== "object") return;
+      const expiresAt = Number(current.expiresAt ?? 0);
+      if (expiresAt <= now) return;
+
+      const currentClaimId = current.claimId ? String(current.claimId) : null;
+      const claimedAt = Number(current.claimedAt ?? 0);
+      const claimExpired = currentClaimId && (!claimedAt || now - claimedAt > CLAIM_TTL_MS);
+      if (currentClaimId && !claimExpired) return;
+
+      return {
+        ...current,
+        claimId,
+        claimedAt: now
+      };
+    });
+
+    if (!result.committed) return null;
+    const record = result.snapshot.val();
+    if (!record?.profile) return null;
 
     return {
       code,
       claimId,
       profile: structuredClone(record.profile),
-      expiresAt: record.expiresAt
+      expiresAt: Number(record.expiresAt)
     };
   }
 
-  commit(claim) {
-    const record = this.records.get(claim.code);
-    if (!record || record.claimId !== claim.claimId) return false;
+  async commit(claim) {
+    const ref = this.codesRef.child(claim.code);
+    const snapshot = await ref.get();
+    const record = snapshot.val();
+    if (!record || String(record.claimId ?? "") !== String(claim.claimId)) return false;
 
-    this.records.delete(claim.code);
-    if (this.codeByRobloxUserId.get(record.profile.userId) === claim.code) {
-      this.codeByRobloxUserId.delete(record.profile.userId);
+    const userId = String(record.profile?.userId ?? "");
+    const stateSnapshot = userId ? await this.codeStateRef.child(userId).get() : null;
+    const updates = { [`codes/${claim.code}`]: null };
+    if (userId && stateSnapshot?.val()?.code === claim.code) {
+      updates[`codeState/${userId}/code`] = null;
     }
+
+    await this.root.update(updates);
     return true;
   }
 
-  release(claim) {
-    const record = this.records.get(claim.code);
-    if (!record || record.claimId !== claim.claimId) return false;
-
-    record.claimId = null;
-    record.claimedAt = null;
-    return true;
+  async release(claim) {
+    const ref = this.codesRef.child(claim.code);
+    const result = await ref.transaction((current) => {
+      if (!current || String(current.claimId ?? "") !== String(claim.claimId)) return;
+      return {
+        ...current,
+        claimId: null,
+        claimedAt: null
+      };
+    });
+    return result.committed;
   }
 }

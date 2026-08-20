@@ -25,18 +25,20 @@ export class RewardService {
     this.database = database;
   }
 
-  issuePoints(discordUserId) {
-    const link = this.database.getByDiscordUserId(discordUserId);
+  async issuePoints(discordUserId) {
+    await this.database.cleanupRewards();
+
+    const link = await this.database.getByDiscordUserId(discordUserId);
     if (!link) {
       const error = new Error("Use `/verify` antes de solicitar uma recompensa externa.");
       error.code = "REWARD_NOT_VERIFIED";
       throw error;
     }
 
-    const active = this.database.getActiveRewardForDiscord(discordUserId);
+    const active = await this.database.getActiveRewardForDiscord(discordUserId);
     if (active) return { reward: active, reused: true };
 
-    const lastConsumed = this.database.getLastConsumedReward(discordUserId, REWARD_TYPE_POINTS);
+    const lastConsumed = await this.database.getLastConsumedReward(discordUserId, REWARD_TYPE_POINTS);
     if (lastConsumed?.consumedAt) {
       const nextAt = lastConsumed.consumedAt + DAILY_COOLDOWN_MS;
       if (nextAt > Date.now()) {
@@ -46,12 +48,22 @@ export class RewardService {
       }
     }
 
-    let code;
-    do {
-      code = generateCode();
-    } while (this.database.getRewardByCode(code));
+    let code = null;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const candidate = generateCode();
+      if (!await this.database.getRewardByCode(candidate)) {
+        code = candidate;
+        break;
+      }
+    }
 
-    const reward = this.database.createRewardCode({
+    if (!code) {
+      const error = new Error("Não foi possível gerar um código de recompensa agora. Tente novamente.");
+      error.code = "REWARD_CODE_UNAVAILABLE";
+      throw error;
+    }
+
+    const reward = await this.database.createRewardCode({
       code,
       discordUserId,
       robloxUserId: link.robloxUserId,
@@ -63,7 +75,7 @@ export class RewardService {
     return { reward, reused: false };
   }
 
-  reserve({ code, robloxUserId }) {
+  async reserve({ code, robloxUserId }) {
     const normalizedCode = String(code ?? "").trim().toUpperCase();
     if (!/^PNT-[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(normalizedCode)) {
       const error = new Error("Código de recompensa inválido.");
@@ -71,7 +83,7 @@ export class RewardService {
       throw error;
     }
 
-    const reward = this.database.getRewardByCode(normalizedCode);
+    const reward = await this.database.getRewardByCode(normalizedCode);
     if (!reward || reward.consumedAt || reward.expiresAt <= Date.now()) {
       const error = new Error("Este código de recompensa expirou ou já foi utilizado.");
       error.statusCode = 404;
@@ -85,7 +97,7 @@ export class RewardService {
     }
 
     const reservationToken = randomUUID();
-    const reserved = this.database.reserveRewardCode({
+    const reserved = await this.database.reserveRewardCode({
       code: normalizedCode,
       robloxUserId: Number(robloxUserId),
       reservationToken,
@@ -106,8 +118,8 @@ export class RewardService {
     };
   }
 
-  commit({ code, reservationToken }) {
-    const reward = this.database.commitRewardCode({
+  async commit({ code, reservationToken }) {
+    const reward = await this.database.commitRewardCode({
       code: String(code ?? "").trim().toUpperCase(),
       reservationToken: String(reservationToken ?? "")
     });
@@ -121,8 +133,8 @@ export class RewardService {
     return reward;
   }
 
-  release({ code, reservationToken }) {
-    this.database.releaseRewardCode({
+  async release({ code, reservationToken }) {
+    await this.database.releaseRewardCode({
       code: String(code ?? "").trim().toUpperCase(),
       reservationToken: String(reservationToken ?? "")
     });
