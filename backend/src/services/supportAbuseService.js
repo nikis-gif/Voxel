@@ -29,7 +29,7 @@ export class SupportAbuseService {
     }
   }
 
-  assertNotDuplicate(payload) {
+  reserve(payload) {
     const now = Date.now();
     this.prune(now);
 
@@ -43,5 +43,11 @@ export class SupportAbuseService {
     }
 
     this.recent.set(fingerprint, now);
+    return fingerprint;
+  }
+
+  release(fingerprint) {
+    if (!fingerprint) return;
+    this.recent.delete(fingerprint);
   }
 }

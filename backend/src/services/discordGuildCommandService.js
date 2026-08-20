@@ -294,7 +294,17 @@ export class DiscordGuildCommandService {
   }
 
   async handleInteractionError(interaction, error) {
-    console.error(`[commands] ${interaction.commandName ?? interaction.customId} failed:`, error);
+    const interactionName = interaction.commandName ?? interaction.customId;
+    const expectedCodes = new Set([
+      "REWARD_NOT_VERIFIED",
+      "REWARD_DAILY_COOLDOWN"
+    ]);
+
+    if (expectedCodes.has(error?.code)) {
+      console.info(`[commands] ${interactionName}: ${error.message}`);
+    } else {
+      console.error(`[commands] ${interactionName} failed:`, error);
+    }
 
     const embed = errorEmbed(
       this.client,

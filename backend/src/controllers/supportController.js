@@ -7,6 +7,9 @@ export function createSupportController({
   supportAbuseService
 }) {
   return async function submitSupport(req, res, next) {
+    let abuseReservation = null;
+    let delivered = false;
+
     try {
       if (typeof req.body.website === "string" && req.body.website.trim() !== "") {
         res.status(400).json({ error: "Solicitação inválida." });
@@ -34,7 +37,8 @@ export function createSupportController({
       }
 
       const ticketPayload = { sender, message, files };
-      supportAbuseService?.assertNotDuplicate(ticketPayload);
+      abuseReservation = supportAbuseService?.reserve(ticketPayload) ?? null;
+
       await contentModerationService?.assertSupportAllowed(ticketPayload);
 
       const ticketId = randomUUID().split("-")[0].toUpperCase();
@@ -45,6 +49,8 @@ export function createSupportController({
         files,
         createdAt: new Date()
       });
+
+      delivered = true;
 
       const response = {
         ok: true,
@@ -58,6 +64,11 @@ export function createSupportController({
       res.status(201).json(response);
     } catch (error) {
       next(error);
+    } finally {
+      // Failed moderation/network attempts must not poison the 30-minute duplicate cache.
+      if (!delivered && abuseReservation) {
+        supportAbuseService?.release(abuseReservation);
+      }
     }
   };
 }

@@ -1,13 +1,8 @@
 const MODERATION_ENDPOINT = "https://api.openai.com/v1/moderations";
 const REQUEST_TIMEOUT_MS = 15_000;
-
-const BLOCKED_SENDER_CATEGORIES = Object.freeze([
-  "sexual",
-  "sexual/minors",
-  "hate",
-  "hate/threatening",
-  "harassment/threatening"
-]);
+const MAX_ATTEMPTS = 3;
+const BASE_RETRY_DELAY_MS = 1_000;
+const MAX_RETRY_DELAY_MS = 8_000;
 
 const BLOCKED_SUPPORT_CATEGORIES = Object.freeze([
   "sexual",
@@ -23,6 +18,28 @@ function blockedCategories(result, categories) {
   return categories.filter((category) => result.categories[category] === true);
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function retryDelay(response, attempt) {
+  const retryAfter = Number.parseFloat(response.headers.get("retry-after") ?? "");
+  if (Number.isFinite(retryAfter) && retryAfter > 0) {
+    return Math.min(Math.ceil(retryAfter * 1000), MAX_RETRY_DELAY_MS);
+  }
+
+  const exponential = BASE_RETRY_DELAY_MS * (2 ** Math.max(0, attempt - 1));
+  const jitter = Math.floor(Math.random() * 350);
+  return Math.min(exponential + jitter, MAX_RETRY_DELAY_MS);
+}
+
+function unavailableError(code = "MODERATION_UNAVAILABLE") {
+  const error = new Error("O filtro de segurança está temporariamente indisponível. Aguarde alguns instantes e tente novamente.");
+  error.statusCode = 503;
+  error.code = code;
+  return error;
+}
+
 export class ContentModerationService {
   constructor({ apiKey = null, model = "omni-moderation-latest" } = {}) {
     this.apiKey = apiKey;
@@ -33,60 +50,76 @@ export class ContentModerationService {
   async request(input) {
     if (!this.enabled) return null;
 
-    let response;
-    try {
-      response = await fetch(MODERATION_ENDPOINT, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ model: this.model, input }),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-      });
-    } catch (error) {
-      const wrapped = new Error("O filtro de segurança está temporariamente indisponível. Tente novamente em alguns instantes.");
-      wrapped.statusCode = 503;
-      wrapped.cause = error;
-      throw wrapped;
-    }
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      let response;
 
-    if (!response.ok) {
+      try {
+        response = await fetch(MODERATION_ENDPOINT, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ model: this.model, input }),
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+        });
+      } catch (error) {
+        if (attempt < MAX_ATTEMPTS) {
+          await sleep(BASE_RETRY_DELAY_MS * attempt);
+          continue;
+        }
+
+        const wrapped = unavailableError();
+        wrapped.cause = error;
+        throw wrapped;
+      }
+
+      if (response.ok) {
+        const payload = await response.json();
+        return payload?.results?.[0] ?? null;
+      }
+
       const body = await response.text().catch(() => "");
+
+      if (response.status === 429 && attempt < MAX_ATTEMPTS) {
+        const delay = retryDelay(response, attempt);
+        console.warn(`[moderation] Rate limited by OpenAI. Retrying in ${delay}ms (${attempt}/${MAX_ATTEMPTS}).`);
+        await sleep(delay);
+        continue;
+      }
+
       console.error(`[moderation] OpenAI moderation returned HTTP ${response.status}: ${body.slice(0, 400)}`);
 
-      const error = new Error("O filtro de segurança está temporariamente indisponível. Tente novamente em alguns instantes.");
-      error.statusCode = 503;
-      throw error;
+      if (response.status === 429) {
+        throw unavailableError("MODERATION_RATE_LIMITED");
+      }
+
+      throw unavailableError();
     }
 
-    const payload = await response.json();
-    return payload?.results?.[0] ?? null;
+    throw unavailableError();
   }
 
   async assertSupportAllowed({ sender, message, files }) {
     if (!this.enabled) return { moderated: false };
 
-    const senderResult = await this.request(sender);
-    const senderBlocked = blockedCategories(senderResult, BLOCKED_SENDER_CATEGORIES);
-    if (senderBlocked.length > 0) {
-      const error = new Error("O nome informado contém conteúdo que não é permitido na Central de Suporte.");
-      error.statusCode = 422;
-      error.code = "SUPPORT_SENDER_BLOCKED";
-      throw error;
-    }
-
-    const contentInput = [
-      { type: "text", text: message },
+    // One multimodal request keeps the support flow cheaper and reduces burst rate limits.
+    const input = [
+      {
+        type: "text",
+        text: `Nome ou usuário informado: ${sender}\n\nRelato de suporte:\n${message}`
+      },
       ...files.map((file) => ({
         type: "image_url",
         image_url: { url: dataUrl(file) }
       }))
     ];
-    const contentResult = await this.request(contentInput);
-    const contentBlocked = blockedCategories(contentResult, BLOCKED_SUPPORT_CATEGORIES);
-    if (contentBlocked.length > 0) {
-      const error = new Error("O texto ou uma das imagens contém conteúdo sexual explícito e não pode ser enviado.");
+
+    const result = await this.request(input);
+    const blocked = blockedCategories(result, BLOCKED_SUPPORT_CATEGORIES);
+
+    if (blocked.length > 0) {
+      const error = new Error("O texto, o nome informado ou uma das imagens contém conteúdo sexual que não pode ser enviado.");
       error.statusCode = 422;
       error.code = "SUPPORT_CONTENT_BLOCKED";
       throw error;
