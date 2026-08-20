@@ -76,6 +76,12 @@ function desiredNickname(profile) {
   };
 }
 
+function roleNamesById(managedRoles) {
+  return new Map(
+    [...managedRoles.values()].map((role) => [role.id, role.name])
+  );
+}
+
 export class DiscordRoleSyncService {
   constructor({ guildId, roleIds = {} }) {
     this.guildId = guildId;
@@ -195,6 +201,34 @@ export class DiscordRoleSyncService {
     return { managed: true, changed: true, value: desired.value };
   }
 
+  async clearManagedNickname(member, reason) {
+    if (!member.nickname) {
+      return { managed: true, changed: false, value: null };
+    }
+
+    const botMember = member.guild.members.me;
+    if (!botMember?.permissions.has(PermissionFlagsBits.ManageNicknames)) {
+      return {
+        managed: true,
+        changed: false,
+        value: member.nickname,
+        skipped: "missing-manage-nicknames"
+      };
+    }
+
+    if (member.id === member.guild.ownerId || !member.manageable) {
+      return {
+        managed: true,
+        changed: false,
+        value: member.nickname,
+        skipped: "hierarchy"
+      };
+    }
+
+    await member.setNickname(null, reason);
+    return { managed: true, changed: true, value: null };
+  }
+
   async sync(member, profile) {
     if (member.guild.id !== this.guildId) {
       const error = new Error("Servidor de verificação inválido.");
@@ -212,6 +246,7 @@ export class DiscordRoleSyncService {
         .filter(Boolean)
     );
     const managedIds = new Set([...managedRoles.values()].map((role) => role.id));
+    const namesById = roleNamesById(managedRoles);
 
     const removeIds = [...member.roles.cache.keys()].filter(
       (roleId) => managedIds.has(roleId) && !desiredIds.has(roleId)
@@ -225,11 +260,39 @@ export class DiscordRoleSyncService {
     const nickname = await this.syncNickname(member, profile, reason);
 
     return {
-      added: addIds.map((id) => managedRoles.size > 0
-        ? [...managedRoles.values()].find((role) => role.id === id)?.name ?? id
-        : id),
-      removed: removeIds.map((id) => [...managedRoles.values()].find((role) => role.id === id)?.name ?? id),
-      active: [...desiredIds].map((id) => [...managedRoles.values()].find((role) => role.id === id)?.name ?? id),
+      added: addIds.map((id) => namesById.get(id) ?? id),
+      removed: removeIds.map((id) => namesById.get(id) ?? id),
+      active: [...desiredIds].map((id) => namesById.get(id) ?? id),
+      nickname
+    };
+  }
+
+  async resetToCivil(member) {
+    if (member.guild.id !== this.guildId) {
+      const error = new Error("Servidor de verificação inválido.");
+      error.code = "WRONG_GUILD";
+      throw error;
+    }
+
+    const managedRoles = await this.resolveManagedRoles(member.guild);
+    const desiredKeys = new Set(["civil"]);
+    this.validateBotAccess(member.guild, managedRoles, desiredKeys, member);
+
+    const civil = managedRoles.get("civil");
+    const managedIds = new Set([...managedRoles.values()].map((role) => role.id));
+    const removeIds = [...member.roles.cache.keys()].filter(
+      (roleId) => managedIds.has(roleId) && roleId !== civil.id
+    );
+    const reason = "Voxel account unlink";
+
+    if (removeIds.length > 0) await member.roles.remove(removeIds, reason);
+    if (!member.roles.cache.has(civil.id)) await member.roles.add(civil, reason);
+
+    const nickname = await this.clearManagedNickname(member, reason);
+
+    return {
+      active: [civil.name],
+      removed: removeIds,
       nickname
     };
   }

@@ -1,10 +1,4 @@
-import {
-  ApplicationCommandType,
-  EmbedBuilder,
-  Events,
-  MessageFlags
-} from "discord.js";
-import { VERIFY_COMMAND_NAME, verifyCommand } from "../commands/verifyCommand.js";
+import { EmbedBuilder, Events, MessageFlags } from "discord.js";
 import { EB_VERIFICATION_CONFIG } from "../config/ebVerificationConfig.js";
 
 const ERROR_COLOR = 0xed4245;
@@ -84,7 +78,6 @@ export class DiscordVerificationService {
     this.roleSyncService = roleSyncService;
     this.database = database;
     this.initialized = false;
-    this.commandRegistered = false;
     this.attempts = new Map();
   }
 
@@ -92,31 +85,12 @@ export class DiscordVerificationService {
     if (this.initialized) return;
     this.initialized = true;
 
-    this.client.on(Events.ClientReady, () => {
-      this.registerCommand().catch((error) => {
-        console.error("[verification] Failed to register /verify:", error);
-      });
-    });
-
     this.client.on(Events.GuildMemberAdd, (member) => {
       if (member.guild.id !== this.guildId) return;
       this.roleSyncService.assignCivil(member).catch((error) => {
         console.error(`[verification] Failed to assign Civil to ${member.user.id}:`, error);
       });
     });
-
-    this.client.on(Events.InteractionCreate, (interaction) => {
-      if (!interaction.isChatInputCommand() || interaction.commandName !== VERIFY_COMMAND_NAME) return;
-      this.handleVerify(interaction).catch((error) => {
-        console.error("[verification] Unhandled /verify error:", error);
-      });
-    });
-
-    if (this.client.isReady()) {
-      this.registerCommand().catch((error) => {
-        console.error("[verification] Failed to register /verify:", error);
-      });
-    }
   }
 
   checkAttemptLimit(userId) {
@@ -134,21 +108,32 @@ export class DiscordVerificationService {
     return true;
   }
 
-  async registerCommand() {
-    if (this.commandRegistered || !this.client.isReady()) return;
+  getLinkedProfile(discordUserId) {
+    return this.database.getVerificationProfileByDiscordUserId(discordUserId);
+  }
 
-    const guild = await this.client.guilds.fetch(this.guildId);
-    const commands = await guild.commands.fetch();
-    const existing = commands.find(
-      (command) => command.name === VERIFY_COMMAND_NAME && command.type === ApplicationCommandType.ChatInput
+  async unverify(member) {
+    const link = this.database.getByDiscordUserId(member.id);
+    if (!link) {
+      return {
+        unlinked: false,
+        link: null,
+        roleResult: await this.roleSyncService.resetToCivil(member)
+      };
+    }
+
+    const roleResult = await this.roleSyncService.resetToCivil(member);
+    this.database.unlinkByDiscordUserId(member.id);
+
+    console.log(
+      `[verification] Discord ${member.id} unlinked from Roblox ${link.robloxUserId} (${link.robloxUsername}).`
     );
-    const data = verifyCommand.toJSON();
 
-    if (existing) await guild.commands.edit(existing.id, data);
-    else await guild.commands.create(data);
-
-    this.commandRegistered = true;
-    console.log(`[verification] /verify registered in ${guild.name}.`);
+    return {
+      unlinked: true,
+      link,
+      roleResult
+    };
   }
 
   async syncRobloxProfile(profile) {
@@ -156,6 +141,8 @@ export class DiscordVerificationService {
     if (!link || link.guildId !== this.guildId) {
       return { linked: false, synced: false };
     }
+
+    this.database.saveVerificationProfile(profile);
 
     if (!this.client.isReady()) {
       const error = new Error("O Discord ainda está conectando. Tente novamente em alguns segundos.");
@@ -235,6 +222,7 @@ export class DiscordVerificationService {
         guildId: this.guildId,
         robloxUsername: claim.profile.username
       });
+      this.database.saveVerificationProfile(claim.profile);
       this.codeStore.commit(claim);
 
       await interaction.editReply({
@@ -263,4 +251,3 @@ export class DiscordVerificationService {
     }
   }
 }
-

@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
+import { createGameAccessRouter } from "./routes/gameAccessRoutes.js";
 import { createHealthRouter } from "./routes/healthRoutes.js";
 import { createSupportRouter } from "./routes/supportRoutes.js";
 import { createVerificationRouter } from "./routes/verificationRoutes.js";
@@ -11,7 +12,8 @@ export function createApp({
   discordClient,
   discordSupportService,
   verificationCodeStore,
-  discordVerificationService
+  discordVerificationService,
+  gameBanService
 }) {
   const app = express();
   const allowedOrigins = new Set(env.allowedOrigins);
@@ -35,15 +37,20 @@ export function createApp({
     maxAge: 86400
   }));
 
-  app.use(express.json({ limit: "32kb" }));
+  app.use(express.json({ limit: "64kb" }));
   app.use("/health", createHealthRouter(discordClient));
   app.use("/api/support", createSupportRouter(discordSupportService));
 
-  if (env.verification.enabled && discordVerificationService) {
+  if (env.verification.enabled && discordVerificationService && gameBanService) {
     app.use("/api/verification", createVerificationRouter({
       codeStore: verificationCodeStore,
       robloxApiKey: env.verification.robloxApiKey,
       discordVerificationService
+    }));
+
+    app.use("/api/game-access", createGameAccessRouter({
+      gameBanService,
+      robloxApiKey: env.verification.robloxApiKey
     }));
   }
 

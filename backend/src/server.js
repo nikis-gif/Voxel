@@ -5,9 +5,11 @@ import { connectDiscordClient, createDiscordClient } from "./bot/discordClient.j
 import { createApp } from "./app.js";
 import { loadEnv } from "./config/env.js";
 import { registerDiscordDmCommands } from "./services/discordDmCommandService.js";
+import { DiscordGuildCommandService } from "./services/discordGuildCommandService.js";
 import { DiscordRoleSyncService } from "./services/discordRoleSyncService.js";
 import { DiscordSupportService } from "./services/discordSupportService.js";
 import { DiscordVerificationService } from "./services/discordVerificationService.js";
+import { GameBanService } from "./services/gameBanService.js";
 import { VerificationCodeStore } from "./services/verificationCodeStore.js";
 import { VerificationDatabase } from "./services/verificationDatabase.js";
 
@@ -19,6 +21,8 @@ const discordClient = createDiscordClient();
 const verificationCodeStore = new VerificationCodeStore();
 let verificationDatabase = null;
 let discordVerificationService = null;
+let gameBanService = null;
+let discordGuildCommandService = null;
 
 registerDiscordDmCommands(discordClient, env.supportOwnerId);
 
@@ -32,6 +36,8 @@ if (env.verification.enabled) {
     roleIds: env.verification.roleIds
   });
 
+  gameBanService = new GameBanService(verificationDatabase);
+
   discordVerificationService = new DiscordVerificationService({
     client: discordClient,
     guildId: env.verification.guildId,
@@ -40,6 +46,14 @@ if (env.verification.enabled) {
     database: verificationDatabase
   });
   discordVerificationService.init();
+
+  discordGuildCommandService = new DiscordGuildCommandService({
+    client: discordClient,
+    guildId: env.verification.guildId,
+    verificationService: discordVerificationService,
+    gameBanService
+  });
+  discordGuildCommandService.init();
 
   console.log(`[verification] Persistent links database: ${env.verification.databasePath}`);
 } else {
@@ -51,7 +65,8 @@ const app = createApp({
   discordClient,
   discordSupportService,
   verificationCodeStore,
-  discordVerificationService
+  discordVerificationService,
+  gameBanService
 });
 const server = createServer(app);
 

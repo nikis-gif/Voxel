@@ -4,6 +4,7 @@ const MAX_CHARACTER_NAME_LENGTH = 80;
 const MAX_LABEL_LENGTH = 80;
 const MAX_ROLE_ID_LENGTH = 80;
 const MAX_COMMUNITY_ID_LENGTH = 80;
+const MAX_COMMUNITIES = 32;
 const DIVISION_KEYS = new Set(["BAC", "BFEsp", "BPE", "CIGS", "CIE"]);
 
 function cleanString(value, maxLength) {
@@ -11,8 +12,40 @@ function cleanString(value, maxLength) {
   return value.trim().slice(0, maxLength);
 }
 
-function readRank(value) {
+function readMilitaryRank(value) {
   return Number.isInteger(value) && value >= 0 && value <= 19 ? value : 0;
+}
+
+function readCommunityRank(value) {
+  return Number.isInteger(value) && value >= 0 && value <= 1000 ? value : 0;
+}
+
+function sanitizeCommunities(value) {
+  if (!Array.isArray(value)) return [];
+
+  const result = [];
+  const seen = new Set();
+
+  for (const item of value.slice(0, MAX_COMMUNITIES)) {
+    if (!item || typeof item !== "object") continue;
+
+    const id = cleanString(item.id, MAX_COMMUNITY_ID_LENGTH);
+    const name = cleanString(item.name, MAX_LABEL_LENGTH);
+    if (!id || !name || seen.has(id)) continue;
+
+    seen.add(id);
+    result.push({
+      id,
+      name,
+      roleName: cleanString(item.roleName, MAX_LABEL_LENGTH),
+      roleRank: readCommunityRank(item.roleRank),
+      memberCount: Number.isInteger(item.memberCount) && item.memberCount >= 0
+        ? Math.min(item.memberCount, 1_000_000_000)
+        : 0
+    });
+  }
+
+  return result;
 }
 
 function sanitizeProfile(body) {
@@ -42,7 +75,7 @@ function sanitizeProfile(body) {
   const military = {
     ready: true,
     isMember: militaryInput.isMember === true,
-    rank: readRank(militaryInput.rank),
+    rank: readMilitaryRank(militaryInput.rank),
     label: cleanString(militaryInput.label, MAX_LABEL_LENGTH),
     roleId: cleanString(militaryInput.roleId, MAX_ROLE_ID_LENGTH)
   };
@@ -53,7 +86,7 @@ function sanitizeProfile(body) {
     isMember: military.isMember && divisionInput.isMember === true && DIVISION_KEYS.has(divisionKey),
     key: DIVISION_KEYS.has(divisionKey) ? divisionKey : "",
     communityId: cleanString(divisionInput.communityId, MAX_COMMUNITY_ID_LENGTH),
-    rank: readRank(divisionInput.rank),
+    rank: readMilitaryRank(divisionInput.rank),
     label: cleanString(divisionInput.label, MAX_LABEL_LENGTH),
     roleId: cleanString(divisionInput.roleId, MAX_ROLE_ID_LENGTH)
   };
@@ -66,7 +99,15 @@ function sanitizeProfile(body) {
     division.roleId = "";
   }
 
-  return { userId, username, displayName, characterName, military, division };
+  return {
+    userId,
+    username,
+    displayName,
+    characterName,
+    military,
+    division,
+    communities: sanitizeCommunities(body?.communities)
+  };
 }
 
 export function createVerificationController(codeStore, discordVerificationService) {
