@@ -1,9 +1,24 @@
 import { Client, Events, GatewayIntentBits, Partials } from "discord.js";
 
-const RETRY_DELAYS_MS = [15_000, 30_000, 60_000, 120_000, 300_000];
+const LOGIN_TIMEOUT_MS = 45_000;
+const RETRY_DELAYS_MS = [60_000, 120_000, 300_000, 600_000];
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function createLoginTimeout() {
+  return new Promise((_, reject) => {
+    const timer = setTimeout(() => {
+      const error = new Error(
+        `Discord Gateway login did not finish within ${Math.round(LOGIN_TIMEOUT_MS / 1000)}s`
+      );
+      error.code = "DISCORD_LOGIN_TIMEOUT";
+      reject(error);
+    }, LOGIN_TIMEOUT_MS);
+
+    timer.unref?.();
+  });
 }
 
 function registerDiagnostics(client) {
@@ -49,14 +64,18 @@ export async function connectDiscordClient(client, token) {
   let attempt = 0;
 
   while (!client.isReady()) {
-    try {
-      console.log(`[discord] Connecting to Discord Gateway (attempt ${attempt + 1})...`);
+    const attemptNumber = attempt + 1;
 
-      // Let discord.js own Discord REST/Gateway rate-limit handling.
-      await client.login(token);
+    try {
+      console.log(`[discord] Connecting to Discord Gateway (attempt ${attemptNumber})...`);
+
+      await Promise.race([
+        client.login(token),
+        createLoginTimeout()
+      ]);
 
       if (!client.isReady()) {
-        throw new Error("Discord login completed without a ready client");
+        throw new Error("Discord login finished without a ready client");
       }
 
       return client;
@@ -65,7 +84,7 @@ export async function connectDiscordClient(client, token) {
       attempt += 1;
 
       console.error(
-        `[discord] Connection attempt failed. Retrying in ${Math.round(retryDelay / 1000)}s:`,
+        `[discord] Attempt ${attemptNumber} failed. Retrying in ${Math.round(retryDelay / 1000)}s:`,
         error
       );
 
