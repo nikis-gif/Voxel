@@ -64,16 +64,32 @@ export class GameBanService {
     throw error;
   }
 
-  ban({ discordUserId = null, robloxUserId = null, moderatorDiscordId, reason }) {
+  ban({
+    discordUserId = null,
+    robloxUserId = null,
+    moderatorDiscordId,
+    reason,
+    durationMs = null,
+    source = "manual"
+  }) {
     const target = this.resolveTarget({ discordUserId, robloxUserId });
+    const existing = this.database.getGameBan(target.robloxUserId);
+
+    if (existing && existing.expiresAt == null && durationMs != null) {
+      return existing;
+    }
+
+    const expiresAt = durationMs == null ? null : Date.now() + Math.max(1, durationMs);
     const ban = this.database.setGameBan({
       ...target,
       moderatorDiscordId,
-      reason: cleanReason(reason)
+      reason: cleanReason(reason),
+      expiresAt,
+      source
     });
 
     console.log(
-      `[game-ban] Roblox ${ban.robloxUserId} banned by Discord ${moderatorDiscordId}.`
+      `[game-ban] Roblox ${ban.robloxUserId} banned by Discord ${moderatorDiscordId}${expiresAt ? ` until ${new Date(expiresAt).toISOString()}` : " permanently"}.`
     );
 
     return ban;
@@ -114,10 +130,7 @@ export class GameBanService {
     }
 
     const ban = this.database.getGameBan(parsedUserId);
-    return {
-      banned: Boolean(ban),
-      ban
-    };
+    return { banned: Boolean(ban), ban };
   }
 
   list(page, pageSize = 6) {
@@ -126,10 +139,7 @@ export class GameBanService {
     const safePage = Math.min(Math.max(0, page), totalPages - 1);
 
     return {
-      items: this.database.listGameBans({
-        limit: pageSize,
-        offset: safePage * pageSize
-      }),
+      items: this.database.listGameBans({ limit: pageSize, offset: safePage * pageSize }),
       count,
       page: safePage,
       totalPages

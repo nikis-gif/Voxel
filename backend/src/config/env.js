@@ -70,6 +70,8 @@ export function loadEnv() {
     throw new Error("ROBLOX_API_KEY and EB_GUILD_ID must be configured together");
   }
 
+  const openAiApiKey = optionalEnv("OPENAI_API_KEY");
+
   return Object.freeze({
     port: parsePort(process.env.PORT),
     nodeEnv: process.env.NODE_ENV?.trim() || "development",
@@ -77,6 +79,11 @@ export function loadEnv() {
     supportOwnerId: requireEnv("SUPPORT_OWNER_ID"),
     allowedOrigins,
     trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
+    supportModeration: Object.freeze({
+      enabled: Boolean(openAiApiKey),
+      apiKey: openAiApiKey,
+      model: "omni-moderation-latest"
+    }),
     verification: Object.freeze({
       enabled: Boolean(robloxApiKey && ebGuildId),
       robloxApiKey,

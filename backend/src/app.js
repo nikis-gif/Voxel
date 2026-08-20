@@ -3,7 +3,9 @@ import express from "express";
 import helmet from "helmet";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { createGameAccessRouter } from "./routes/gameAccessRoutes.js";
+import { createGameBridgeRouter } from "./routes/gameBridgeRoutes.js";
 import { createHealthRouter } from "./routes/healthRoutes.js";
+import { createRewardRouter } from "./routes/rewardRoutes.js";
 import { createSupportRouter } from "./routes/supportRoutes.js";
 import { createVerificationRouter } from "./routes/verificationRoutes.js";
 
@@ -11,9 +13,13 @@ export function createApp({
   env,
   discordClient,
   discordSupportService,
+  contentModerationService,
+  supportAbuseService,
   verificationCodeStore,
   discordVerificationService,
-  gameBanService
+  gameBanService,
+  gameBridgeService,
+  rewardService
 }) {
   const app = express();
   const allowedOrigins = new Set(env.allowedOrigins);
@@ -37,9 +43,13 @@ export function createApp({
     maxAge: 86400
   }));
 
-  app.use(express.json({ limit: "64kb" }));
+  app.use(express.json({ limit: "96kb" }));
   app.use("/health", createHealthRouter(discordClient));
-  app.use("/api/support", createSupportRouter(discordSupportService));
+  app.use("/api/support", createSupportRouter({
+    discordSupportService,
+    contentModerationService,
+    supportAbuseService
+  }));
 
   if (env.verification.enabled && discordVerificationService && gameBanService) {
     app.use("/api/verification", createVerificationRouter({
@@ -50,6 +60,16 @@ export function createApp({
 
     app.use("/api/game-access", createGameAccessRouter({
       gameBanService,
+      robloxApiKey: env.verification.robloxApiKey
+    }));
+
+    app.use("/api/game-bridge", createGameBridgeRouter({
+      gameBridgeService,
+      robloxApiKey: env.verification.robloxApiKey
+    }));
+
+    app.use("/api/rewards", createRewardRouter({
+      rewardService,
       robloxApiKey: env.verification.robloxApiKey
     }));
   }
