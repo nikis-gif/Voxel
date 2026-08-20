@@ -1,3 +1,3 @@
 window.VOXEL_CONFIG = Object.freeze({
-  supportApiUrl: "https://voxel-support-api.onrender.com/api/support"
+  supportApiUrl: "https://voxel-support-api-production.up.railway.app/api/support"
 });
