@@ -19,7 +19,7 @@ const discordSupportService = new DiscordSupportService(discordClient, env.suppo
 const app = createApp({ env, discordClient, discordSupportService });
 const server = createServer(app);
 
-// Bind HTTP first so cloud platforms can detect the web service immediately.
+// Bind HTTP first so Render can detect the service port immediately.
 server.listen(env.port, "0.0.0.0", () => {
   console.log(`Voxel Support API running on 0.0.0.0:${env.port}`);
 });
@@ -31,13 +31,16 @@ connectDiscordClient(discordClient, env.discordBotToken)
   })
   .catch((error) => {
     console.error("Discord bot failed to connect:", error);
+    console.error("[discord] Exiting so the hosting platform can restart a clean instance.");
+
+    setTimeout(() => process.exit(1), 1_000).unref();
   });
 
 function shutdown(signal) {
   console.log(`${signal} received. Shutting down...`);
 
-  server.close(() => {
-    discordClient.destroy();
+  server.close(async () => {
+    await discordClient.destroy().catch(() => {});
     process.exit(0);
   });
 
