@@ -1,5 +1,6 @@
 const MAX_USERNAME_LENGTH = 32;
 const MAX_DISPLAY_NAME_LENGTH = 64;
+const MAX_CHARACTER_NAME_LENGTH = 80;
 const MAX_LABEL_LENGTH = 80;
 const MAX_ROLE_ID_LENGTH = 80;
 const MAX_COMMUNITY_ID_LENGTH = 80;
@@ -24,6 +25,7 @@ function sanitizeProfile(body) {
 
   const username = cleanString(body?.username, MAX_USERNAME_LENGTH);
   const displayName = cleanString(body?.displayName, MAX_DISPLAY_NAME_LENGTH);
+  const characterName = cleanString(body?.characterName, MAX_CHARACTER_NAME_LENGTH);
   if (!username) {
     const error = new Error("Invalid Roblox username");
     error.statusCode = 400;
@@ -64,7 +66,7 @@ function sanitizeProfile(body) {
     division.roleId = "";
   }
 
-  return { userId, username, displayName, military, division };
+  return { userId, username, displayName, characterName, military, division };
 }
 
 export function createVerificationController(codeStore, discordVerificationService) {
