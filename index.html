@@ -1,0 +1,2309 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exército Brasileiro | Comando Geral | Roblox</title>
+<meta name="description" content="Comunidade de simulação militar no Roblox. Hierarquia de 19 postos, instrução de recrutas e cinco subdivisões operacionais.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================================
+   TOKENS
+   ============================================================ */
+:root{
+  --noite:#11150E;          /* fundo do hero · noite em campo */
+  --noite-2:#1A2015;
+  --tinta:#232B1C;          /* texto principal sobre areia */
+  --oliva:#4C5C33;          /* verde oliva institucional */
+  --oliva-claro:#7A8C57;
+  --areia:#D5CFBA;          /* fundo "manual impresso" */
+  --areia-2:#E2DDCB;        /* cartões */
+  --areia-3:#C6BFA6;        /* linhas / bordas */
+  --ouro:#B08D2E;           /* metal / insígnia */
+  --carimbo:#8A2B21;        /* vermelho de carimbo · uso raro */
+
+  --linha:rgba(35,43,28,.22);
+  --linha-noite:rgba(213,207,186,.16);
+
+  --display:"Saira Condensed",  "Arial Narrow", sans-serif;
+  --texto:"Inter", system-ui, -apple-system, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, monospace;
+
+  --gutter:clamp(20px,5vw,72px);
+  --max:1320px;
+}
+
+/* ============================================================
+   BASE
+   ============================================================ */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--areia);
+  color:var(--tinta);
+  font-family:var(--texto);
+  font-size:16px;
+  line-height:1.65;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+body.is-locked{overflow:hidden}
+img{max-width:100%;display:block}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--ouro);outline-offset:3px}
+
+h1,h2,h3,h4{
+  font-family:var(--display);
+  font-weight:700;
+  text-transform:uppercase;
+  line-height:.92;
+  letter-spacing:.005em;
+  margin:0;
+}
+p{margin:0}
+
+.wrap{width:100%;max-width:var(--max);margin-inline:auto;padding-inline:var(--gutter)}
+
+/* rótulos técnicos (mono) */
+.tag{
+  font-family:var(--mono);
+  font-size:11px;
+  font-weight:500;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+}
+
+/* ruído de papel */
+.grao{
+  position:fixed;inset:0;z-index:9000;pointer-events:none;
+  opacity:.045;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ============================================================
+   BARRA DA PLATAFORMA (VOXEL)
+   ============================================================ */
+.voxel-bar{
+  position:fixed;top:0;left:0;right:0;z-index:900;height:36px;
+  background:#0E0F11;border-bottom:1px solid rgba(237,237,239,.12);
+}
+.voxel-bar-in{display:flex;align-items:center;justify-content:space-between;gap:20px;height:36px}
+.vb-marca{display:flex;align-items:center;gap:9px;color:#EDEDEF}
+.vb-marca svg{width:17px;height:17px;flex:none}
+.vb-marca b{font-family:var(--display);font-size:16px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;line-height:1}
+.vb-trilha{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:rgba(237,237,239,.4)}
+.vb-trilha i{font-style:normal;opacity:.45}
+.vb-trilha strong{color:var(--ouro);font-weight:500}
+.vb-dir{display:flex;align-items:center;gap:20px;font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:rgba(237,237,239,.4)}
+.vb-dir a,.vb-dir button{transition:color .25s;font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:inherit}
+.vb-dir a:hover,.vb-dir button:hover{color:#EDEDEF}
+
+/* ============================================================
+   SUPORTE VOXEL (painel interno)
+   ============================================================ */
+.link-suporte{font:inherit;color:inherit;padding:0;text-align:left}
+.link-suporte:hover{color:var(--ouro)}
+.suporte{position:fixed;inset:0;z-index:9600;display:none}
+.suporte.on{display:block}
+.suporte-fundo{position:absolute;inset:0;background:rgba(6,7,8,.76);backdrop-filter:blur(4px)}
+.suporte-caixa{
+  position:relative;z-index:2;width:min(660px,92vw);max-height:86vh;overflow-y:auto;
+  margin:7vh auto 0;background:#0E0F11;color:#EDEDEF;border:1px solid rgba(237,237,239,.13);padding:28px 30px 32px;
+}
+.suporte-topo{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding-bottom:20px;border-bottom:1px solid rgba(237,237,239,.1)}
+.suporte-topo .marca{display:flex;align-items:center;gap:11px}
+.suporte-topo .marca svg{width:28px;height:28px;flex:none}
+.suporte-topo .marca b{display:block;font-family:var(--display);font-size:20px;letter-spacing:.16em;text-transform:uppercase;line-height:1}
+.suporte-topo .marca span{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:rgba(237,237,239,.4)}
+.fechar{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:rgba(237,237,239,.45);display:flex;align-items:center;gap:8px;transition:color .25s}
+.fechar:hover{color:#EDEDEF}
+.suporte h3{font-family:var(--display);font-size:clamp(26px,4vw,36px);text-transform:none;letter-spacing:0;margin-top:22px}
+.suporte>.suporte-caixa>p.intro{margin-top:12px;font-size:14.5px;color:rgba(237,237,239,.6)}
+.bot{display:flex;gap:13px;padding:16px;border:1px solid rgba(237,237,239,.1);background:rgba(237,237,239,.035);margin-top:22px}
+.bot svg{width:26px;height:26px;flex:none}
+.bot b{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:rgba(237,237,239,.45);margin-bottom:6px}
+.bot p{font-size:13.5px;color:rgba(237,237,239,.62)}
+.campo{margin-top:22px}
+.campo label{display:flex;justify-content:space-between;gap:12px;font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:rgba(237,237,239,.45);margin-bottom:9px}
+.campo label em{font-style:normal;color:rgba(237,237,239,.3)}
+.campo input,.campo textarea{
+  width:100%;background:#15171A;border:1px solid rgba(237,237,239,.13);color:#EDEDEF;
+  padding:12px 14px;font-family:var(--texto);font-size:14.5px;line-height:1.5;transition:border-color .25s;
+}
+.campo textarea{min-height:132px;resize:vertical}
+.campo input:focus,.campo textarea:focus{border-color:rgba(176,141,46,.7);outline:none}
+.campo input::placeholder,.campo textarea::placeholder{color:rgba(237,237,239,.25)}
+.solta{border:1px dashed rgba(237,237,239,.22);padding:22px;text-align:center;font-size:13.5px;color:rgba(237,237,239,.45);cursor:pointer;transition:border-color .25s,color .25s}
+.solta:hover{border-color:rgba(237,237,239,.45);color:rgba(237,237,239,.75)}
+.solta.tem{border-style:solid;border-color:rgba(176,141,46,.6);color:#EDEDEF}
+.aviso{margin-top:20px;padding:13px 15px;border-left:2px solid var(--carimbo);background:rgba(138,43,33,.1);font-size:12.5px;color:rgba(237,237,239,.6)}
+.suporte-rodape{margin-top:24px;padding-top:20px;border-top:1px solid rgba(237,237,239,.1);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.suporte-rodape .estado{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:rgba(237,237,239,.4)}
+.suporte-rodape .estado.erro{color:#D98A80}
+.suporte-rodape .estado.ok{color:#8FBF8F}
+.btn.enviar{border-color:rgba(237,237,239,.35);color:#EDEDEF}
+.btn.enviar::before{background:#EDEDEF}
+.btn.enviar:hover{color:#0E0F11}
+.vb-status{display:flex;align-items:center;gap:8px}
+.vb-status::before{content:"";width:6px;height:6px;border-radius:50%;background:#79B87A}
+
+/* ============================================================
+   CABEÇALHO
+   ============================================================ */
+.topo{
+  position:fixed;top:36px;left:0;right:0;z-index:880;
+  transition:background .35s ease,border-color .35s ease,backdrop-filter .35s;
+  border-bottom:1px solid transparent;
+}
+.topo.fixado{
+  background:rgba(17,21,14,.82);
+  backdrop-filter:blur(10px);
+  border-bottom-color:var(--linha-noite);
+}
+.topo.claro{background:rgba(213,207,186,.9);border-bottom-color:var(--linha)}
+.topo-in{display:flex;align-items:center;justify-content:space-between;height:74px}
+.brasao{display:flex;align-items:center;gap:12px;color:var(--areia)}
+.topo.claro .brasao{color:var(--tinta)}
+.brasao svg{width:34px;height:34px;flex:none}
+.brasao b{font-family:var(--display);font-size:19px;letter-spacing:.06em;text-transform:uppercase;line-height:1;display:block}
+.brasao span{font-family:var(--mono);font-size:9.5px;letter-spacing:.24em;opacity:.62;text-transform:uppercase}
+
+.menu{display:flex;align-items:center;gap:30px}
+.menu a{
+  font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:rgba(213,207,186,.72);position:relative;padding:6px 0;transition:color .25s;
+}
+.topo.claro .menu a{color:rgba(35,43,28,.7)}
+.menu a::after{
+  content:"";position:absolute;left:0;bottom:0;height:1px;width:100%;
+  background:var(--ouro);transform:scaleX(0);transform-origin:right;transition:transform .35s cubic-bezier(.2,.8,.2,1);
+}
+.menu a:hover{color:var(--ouro)}
+.menu a:hover::after{transform:scaleX(1);transform-origin:left}
+
+.btn{
+  display:inline-flex;align-items:center;gap:10px;
+  font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+  padding:13px 22px;border:1px solid var(--ouro);color:var(--ouro);
+  position:relative;overflow:hidden;transition:color .3s ease;
+}
+.btn::before{
+  content:"";position:absolute;inset:0;background:var(--ouro);
+  transform:translateY(101%);transition:transform .4s cubic-bezier(.2,.8,.2,1);z-index:-1;
+}
+.btn:hover{color:var(--noite)}
+.btn:hover::before{transform:translateY(0)}
+.btn.solido{background:var(--ouro);color:var(--noite)}
+.btn.solido::before{background:var(--tinta)}
+.btn.solido:hover{color:var(--areia)}
+.btn.escuro{border-color:var(--tinta);color:var(--tinta)}
+.btn.escuro::before{background:var(--tinta)}
+.btn.escuro:hover{color:var(--areia)}
+
+.hamb{display:none;width:42px;height:42px;position:relative;z-index:900}
+.hamb i{display:block;position:absolute;left:9px;width:24px;height:1.5px;background:var(--areia);transition:transform .35s,opacity .25s}
+.topo.claro .hamb i{background:var(--tinta)}
+.hamb i:nth-child(1){top:17px}
+.hamb i:nth-child(2){top:24px}
+.hamb.on i:nth-child(1){transform:translateY(3.5px) rotate(45deg);background:var(--areia)}
+.hamb.on i:nth-child(2){transform:translateY(-3.5px) rotate(-45deg);background:var(--areia)}
+
+.gaveta{
+  position:fixed;inset:36px 0 0 0;z-index:850;background:var(--noite);
+  display:flex;flex-direction:column;justify-content:center;gap:6px;padding:0 var(--gutter);
+  clip-path:inset(0 0 100% 0);visibility:hidden;
+}
+.gaveta a{
+  font-family:var(--display);font-size:clamp(34px,9vw,58px);text-transform:uppercase;
+  color:var(--areia);border-bottom:1px solid var(--linha-noite);padding:14px 0;
+}
+.gaveta a small{font-family:var(--mono);font-size:11px;color:var(--ouro);margin-right:14px;letter-spacing:.14em}
+
+/* ============================================================
+   HERO
+   ============================================================ */
+.hero{
+  position:relative;min-height:100svh;background:var(--noite);color:var(--areia);
+  display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;
+  padding-bottom:34px;
+}
+.hero::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(120% 80% at 70% 20%,rgba(122,140,87,.18),transparent 60%),
+             linear-gradient(to top,rgba(17,21,14,.96) 8%,rgba(17,21,14,.35) 55%,rgba(17,21,14,.7));
+}
+#topo-mapa{position:absolute;inset:0;width:100%;height:100%}
+#topo-mapa path{fill:none;stroke:rgba(176,141,46,.42);stroke-width:1}
+#topo-mapa path.fraca{stroke:rgba(213,207,186,.13)}
+
+.hud{position:absolute;inset:0;pointer-events:none}
+.hud .canto{position:absolute;width:34px;height:34px;border:1px solid rgba(176,141,46,.5)}
+.hud .canto.tl{top:96px;left:var(--gutter);border-right:0;border-bottom:0}
+.hud .canto.tr{top:96px;right:var(--gutter);border-left:0;border-bottom:0}
+.hud .canto.bl{bottom:96px;left:var(--gutter);border-right:0;border-top:0}
+.hud .canto.br{bottom:96px;right:var(--gutter);border-left:0;border-top:0}
+.hud .coord{
+  position:absolute;top:50%;right:var(--gutter);transform:translateY(-50%) rotate(90deg);transform-origin:right center;
+  color:rgba(213,207,186,.35);white-space:nowrap;
+}
+
+.hero-in{position:relative;z-index:3;width:100%}
+.eyebrow{display:flex;align-items:center;gap:12px;color:var(--ouro);margin-bottom:26px}
+.eyebrow::before{content:"";width:46px;height:1px;background:var(--ouro);display:block}
+
+.titulo{font-size:clamp(58px,13.5vw,190px);letter-spacing:-.01em;font-weight:800}
+.titulo .linha{display:block;overflow:hidden;padding-bottom:.04em}
+.titulo .linha em{display:block;font-style:normal;will-change:transform}
+.titulo .fino{-webkit-text-stroke:1.4px rgba(213,207,186,.62);color:transparent;font-weight:600}
+
+.hero-baixo{
+  display:grid;grid-template-columns:1.15fr .85fr;gap:48px;align-items:end;
+  margin-top:40px;padding-top:26px;border-top:1px solid var(--linha-noite);
+}
+.hero-baixo p{color:rgba(213,207,186,.72);max-width:46ch;font-size:15.5px}
+.hero-acoes{display:flex;gap:14px;flex-wrap:wrap;justify-content:flex-end}
+.w{display:inline-block;overflow:hidden;vertical-align:bottom;line-height:inherit}
+.w-in{display:inline-block;will-change:transform}
+
+/* faixa de dados */
+.faixa{
+  border-top:1px solid var(--linha-noite);border-bottom:1px solid var(--linha-noite);
+  background:var(--noite-2);color:var(--areia);overflow:hidden;position:relative;z-index:4;
+}
+.faixa-in{display:flex;white-space:nowrap;padding:13px 0;will-change:transform}
+.faixa-in span{
+  font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;
+  color:rgba(213,207,186,.55);padding-inline:26px;display:inline-flex;align-items:center;gap:26px;
+}
+.faixa-in span::after{content:"";width:5px;height:5px;background:var(--ouro);display:block;transform:rotate(45deg)}
+
+/* ============================================================
+   SEÇÕES (padrão manual)
+   ============================================================ */
+.secao{padding-block:clamp(76px,11vw,148px);position:relative}
+.secao-cab{display:flex;align-items:baseline;gap:16px;padding-bottom:14px;border-bottom:1px solid var(--linha);margin-bottom:clamp(38px,6vw,72px)}
+.secao-cab .num{color:var(--carimbo);font-family:var(--mono);font-size:11px;letter-spacing:.2em;font-weight:600}
+.secao-cab .nome{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;opacity:.6}
+.secao-cab .fio{flex:1;height:1px;background:var(--linha)}
+
+.reveal{opacity:0;transform:translateY(26px)}
+.no-anim .reveal{opacity:1;transform:none}
+
+/* · doutrina · */
+.doutrina{display:grid;grid-template-columns:1.05fr 1fr;gap:clamp(34px,6vw,86px);align-items:start}
+.doutrina h2{font-size:clamp(38px,5.6vw,74px);max-width:14ch}
+.doutrina h2 .ouro{color:var(--ouro)}
+.doutrina .texto{display:flex;flex-direction:column;gap:20px;padding-top:8px}
+.doutrina .texto p{font-size:16.5px;color:rgba(35,43,28,.82)}
+.doutrina .texto p.destaque{font-size:19px;color:var(--tinta);font-weight:500;line-height:1.5}
+
+.pilares{margin-top:38px;border-top:1px solid var(--linha)}
+.pilar{display:grid;grid-template-columns:44px 1fr;gap:18px;padding:20px 0;border-bottom:1px solid var(--linha);align-items:start}
+.pilar .cod{font-family:var(--mono);font-size:11px;color:var(--ouro);letter-spacing:.14em;padding-top:4px}
+.pilar h4{font-size:21px;letter-spacing:.03em;margin-bottom:4px}
+.pilar p{font-size:14.5px;color:rgba(35,43,28,.7)}
+
+/* números */
+.numeros{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--linha);border:1px solid var(--linha);margin-top:clamp(52px,7vw,90px)}
+.numero{background:var(--areia);padding:30px 26px}
+.numero .v{font-family:var(--display);font-size:clamp(42px,5.5vw,66px);font-weight:800;line-height:1;letter-spacing:-.01em}
+.numero .l{margin-top:8px;color:rgba(35,43,28,.6)}
+
+/* · unidades (trilho horizontal) · */
+.unidades{background:var(--noite);color:var(--areia);overflow:hidden}
+.unidades .secao-cab{border-bottom-color:var(--linha-noite)}
+.unidades .secao-cab .nome{color:rgba(213,207,186,.6);opacity:1}
+.unidades .secao-cab .num{color:var(--ouro)}
+.unidades .secao-cab .fio{background:var(--linha-noite)}
+.unidades h2{font-size:clamp(36px,5vw,64px);max-width:18ch;margin-bottom:40px}
+.trilho{display:flex;gap:24px;padding-inline:var(--gutter);will-change:transform}
+.ficha{
+  flex:none;width:min(400px,82vw);border:1px solid var(--linha-noite);background:rgba(213,207,186,.03);
+  padding:30px 28px 26px;display:flex;flex-direction:column;min-height:390px;transition:border-color .35s,background .35s;
+}
+.ficha:hover{border-color:rgba(176,141,46,.55);background:rgba(176,141,46,.05)}
+.ficha .sigla{font-family:var(--mono);font-size:11px;letter-spacing:.2em;color:var(--ouro);display:flex;justify-content:space-between}
+.ficha h3{font-size:31px;margin:20px 0 6px;letter-spacing:.02em}
+.ficha .lema{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:rgba(213,207,186,.45);text-transform:uppercase}
+.ficha p{margin-top:20px;font-size:14.5px;color:rgba(213,207,186,.72)}
+.ficha ul{margin:auto 0 0;padding:20px 0 0;list-style:none;border-top:1px solid var(--linha-noite);display:flex;flex-wrap:wrap;gap:8px}
+.ficha li{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--linha-noite);padding:5px 9px;color:rgba(213,207,186,.6)}
+.arraste{margin-top:26px;color:rgba(213,207,186,.4);display:flex;gap:12px;align-items:center}
+
+/* · hierarquia · */
+.escada{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--linha);border:1px solid var(--linha)}
+.circulo{background:var(--areia-2);padding:24px 20px 26px}
+.circulo header{padding-bottom:14px;border-bottom:1px solid var(--linha);margin-bottom:6px}
+.circulo header h3{font-size:23px;letter-spacing:.03em}
+.circulo header .tag{color:rgba(35,43,28,.55);display:block;margin-top:5px}
+.posto{display:grid;grid-template-columns:34px 1fr auto;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(35,43,28,.1)}
+.posto:last-child{border-bottom:0}
+.posto svg{width:34px;height:34px}
+.posto .info{display:flex;flex-direction:column;gap:2px;min-width:0}
+.posto .nm{font-family:var(--display);font-size:17.5px;text-transform:uppercase;letter-spacing:.02em;line-height:1.05}
+.posto .ab{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;color:rgba(35,43,28,.5)}
+.posto .rk{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--areia-3)}
+
+/* · alistamento · */
+.alistamento{position:relative}
+.etapas{display:grid;grid-template-columns:repeat(4,1fr);gap:26px;position:relative;padding-top:34px}
+.etapas::before{content:"";position:absolute;top:0;left:0;right:0;height:1px;background:var(--linha)}
+.etapas .avanco{position:absolute;top:0;left:0;height:1px;width:100%;background:var(--carimbo);transform:scaleX(0);transform-origin:left}
+.etapa .n{font-family:var(--display);font-size:52px;font-weight:800;line-height:1;color:var(--areia-3)}
+.etapa h4{font-size:22px;margin:12px 0 8px;letter-spacing:.02em}
+.etapa p{font-size:14.5px;color:rgba(35,43,28,.72)}
+.etapa .prazo{margin-top:12px;color:var(--carimbo);display:block}
+
+.carimbo{
+  position:absolute;right:var(--gutter);top:clamp(60px,8vw,110px);
+  border:2.5px solid var(--carimbo);color:var(--carimbo);padding:10px 16px;
+  font-family:var(--mono);font-weight:600;font-size:12px;letter-spacing:.18em;text-transform:uppercase;
+  transform:rotate(-9deg);opacity:.85;line-height:1.35;text-align:center;
+}
+.carimbo b{display:block;font-size:15px;letter-spacing:.22em}
+
+/* · disciplina · */
+.artigos{border-top:1px solid var(--linha)}
+.artigo{display:grid;grid-template-columns:120px 1fr;gap:24px;padding:22px 0;border-bottom:1px solid var(--linha);transition:background .3s,padding-left .3s}
+.artigo:hover{background:rgba(35,43,28,.04);padding-left:12px}
+.artigo .id{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--oliva);padding-top:3px}
+.artigo h4{font-size:20px;margin-bottom:6px;letter-spacing:.02em}
+.artigo p{font-size:14.5px;color:rgba(35,43,28,.72);max-width:78ch}
+
+/* · dúvidas · */
+.faq{border-top:1px solid var(--linha);max-width:960px}
+.item{border-bottom:1px solid var(--linha)}
+.item button{width:100%;display:flex;align-items:center;justify-content:space-between;gap:20px;padding:22px 0;text-align:left}
+.item button span{font-family:var(--display);font-size:clamp(19px,2.4vw,26px);text-transform:uppercase;letter-spacing:.02em;line-height:1.15}
+.item .mais{position:relative;width:16px;height:16px;flex:none}
+.item .mais::before,.item .mais::after{content:"";position:absolute;background:var(--oliva);inset:50% 0 auto 0;height:1.5px;transform:translateY(-50%)}
+.item .mais::after{transform:translateY(-50%) rotate(90deg);transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+.item.aberto .mais::after{transform:translateY(-50%) rotate(0deg)}
+.item .resp{height:0;overflow:hidden}
+.item .resp p{padding-bottom:24px;max-width:74ch;color:rgba(35,43,28,.75);font-size:15px}
+
+/* · rodapé · */
+.rodape{background:var(--noite-2);color:rgba(213,207,186,.62);padding-block:56px 30px;border-top:1px solid var(--linha-noite)}
+.rodape-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:34px}
+.rodape h5{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--ouro);margin:0 0 16px;font-weight:600}
+.rodape ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+.rodape a:hover{color:var(--ouro)}
+.rodape .sobre p{font-size:14px;max-width:38ch;margin-top:14px}
+.rodape .base{margin-top:44px;padding-top:20px;border-top:1px solid var(--linha-noite);display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.rodape .base p{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:rgba(213,207,186,.4);text-transform:uppercase}
+
+/* · parceria Voxel · */
+.parceria-grid{display:grid;grid-template-columns:.82fr 1.18fr;gap:clamp(28px,5vw,64px);align-items:stretch}
+.painel-voxel{
+  background:#0E0F11;color:#EDEDEF;padding:36px 32px 32px;position:relative;overflow:hidden;
+  display:flex;flex-direction:column;min-height:360px;
+}
+.painel-voxel::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:repeating-linear-gradient(90deg,transparent 0 36px,rgba(237,237,239,.045) 36px 37px);
+}
+.voxel-marca{display:flex;align-items:center;gap:15px;position:relative;z-index:2}
+.voxel-marca svg{width:50px;height:50px;flex:none}
+.voxel-marca b{font-family:var(--display);font-size:31px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;line-height:1;display:block}
+.voxel-marca span{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:rgba(237,237,239,.45)}
+.painel-voxel .desc{position:relative;z-index:2;margin-top:auto;padding-top:30px;font-size:14.5px;color:rgba(237,237,239,.62);max-width:34ch}
+.voxel-estado{position:relative;z-index:2;margin-top:24px;padding-top:18px;border-top:1px solid rgba(237,237,239,.14);display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.voxel-estado div span{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:rgba(237,237,239,.38)}
+.voxel-estado div b{display:block;font-family:var(--mono);font-size:12.5px;letter-spacing:.1em;color:#EDEDEF;margin-top:5px;font-weight:500}
+
+.parceria-texto h2{font-size:clamp(32px,4.6vw,58px);max-width:17ch}
+.parceria-texto>p{margin-top:20px;font-size:16.5px;color:rgba(35,43,28,.82);max-width:60ch}
+.recursos{margin-top:32px;border-top:1px solid var(--linha)}
+.recurso{display:grid;grid-template-columns:132px 1fr;gap:18px;padding:16px 0;border-bottom:1px solid var(--linha);align-items:baseline}
+.recurso .k{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--oliva)}
+.recurso p{font-size:14.5px;color:rgba(35,43,28,.72)}
+
+/* ============================================================
+   RESPONSIVO
+   ============================================================ */
+@media (max-width:1080px){
+  .doutrina{grid-template-columns:1fr}
+  .escada{grid-template-columns:1fr 1fr}
+  .etapas{grid-template-columns:repeat(2,1fr);gap:34px}
+  .rodape-grid{grid-template-columns:1fr 1fr}
+  .parceria-grid{grid-template-columns:1fr}
+}
+@media (max-width:820px){
+  .menu{display:none}
+  .hamb{display:block}
+  .vb-trilha{display:none}
+  .hero-baixo{grid-template-columns:1fr;gap:26px}
+  .hero-acoes{justify-content:flex-start}
+  .numeros{grid-template-columns:1fr 1fr}
+  .hud .coord{display:none}
+  .carimbo{position:static;display:inline-block;margin-bottom:26px;transform:rotate(-3deg)}
+  .artigo{grid-template-columns:1fr;gap:8px}
+  .trilho{flex-direction:column;padding-inline:var(--gutter)}
+  .ficha{width:100%;min-height:0}
+  .arraste{display:none}
+}
+@media (max-width:560px){
+  .etapas{grid-template-columns:1fr}
+  .rodape-grid{grid-template-columns:1fr}
+  .recurso{grid-template-columns:1fr;gap:4px}
+  .escada{grid-template-columns:1fr}
+  .vb-status{display:none}
+  .voxel-estado{grid-template-columns:1fr}
+}
+
+.vb-botao{border:0;background:none;padding:0;cursor:pointer}
+.vb-botao:focus-visible{outline:2px solid var(--ouro);outline-offset:4px;border-radius:10px}
+.voxel-acoes{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}
+.voxel-ir,.voxel-discord{min-height:46px;padding:0 18px;border-radius:14px;font-size:14px}
+.voxel-ir{background:#EDEDEF;color:#0E0F11;border:1px solid rgba(237,237,239,.18)}
+.voxel-ir:hover{background:#fff}
+.voxel-discord{background:transparent;color:#EDEDEF;border:1px solid rgba(237,237,239,.14)}
+.voxel-discord:hover{border-color:rgba(237,237,239,.28);background:rgba(237,237,239,.04)}
+
+
+.vx-screen{
+  position:fixed;
+  inset:0;
+  z-index:9700;
+  display:none;
+  flex-direction:column;
+  min-width:0;
+  min-height:100dvh;
+  background:#0e0f11;
+  color:#f4f5f7;
+  font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:15px;
+  line-height:1.6;
+}
+.vx-screen.on{display:flex}
+.vx-screen *{box-sizing:border-box}
+.vx-screen h1,.vx-screen h2,.vx-screen h3,.vx-screen h4{
+  margin:0;
+  color:#f4f5f7;
+  font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  text-transform:none;
+}
+.vx-screen p{margin:0}
+.vx-screen button,.vx-screen input,.vx-screen textarea,.vx-screen select{font-family:inherit}
+.vx-screen .vx-wrap{
+  width:min(100%,1120px);
+  margin:0 auto;
+  padding-inline:clamp(20px,4.2vw,48px);
+}
+
+.vx-bar{
+  flex:none;
+  min-height:64px;
+  border-bottom:1px solid #292b30;
+  background:rgba(16,17,20,.94);
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+}
+.vx-bar .vx-wrap{
+  min-height:64px;
+  display:flex;
+  align-items:center;
+  gap:14px;
+}
+.vx-brand{
+  display:flex;
+  align-items:center;
+  gap:11px;
+  min-width:0;
+  font-size:15px;
+  font-weight:650;
+  letter-spacing:-.015em;
+}
+.vx-mark{
+  width:18px;
+  height:18px;
+  flex:none;
+  display:grid;
+  place-items:center;
+  border-radius:3px;
+  background:#f4f5f7;
+  transform:rotate(45deg);
+}
+.vx-mark i{
+  width:7px;
+  height:7px;
+  display:block;
+  border-radius:1px;
+  background:#121316;
+}
+.vx-spacer{flex:1}
+.vx-close,.vx-back{
+  min-width:74px;
+  height:38px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:0 14px;
+  border:1px solid #34363c;
+  border-radius:11px;
+  background:#17181b;
+  color:#c4c7ce;
+  font-size:13px;
+  font-weight:500;
+  cursor:pointer;
+  transition:background .18s,border-color .18s,color .18s,transform .18s;
+}
+.vx-close:hover,.vx-back:hover{
+  background:#202126;
+  border-color:#474a52;
+  color:#fff;
+}
+.vx-close:active,.vx-back:active{transform:translateY(1px)}
+
+.vx-scroll{
+  flex:1;
+  min-height:0;
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+}
+.vx-body{
+  width:100%;
+  padding-block:clamp(40px,7vh,72px) clamp(44px,8vh,84px);
+}
+
+.vx-pill,.vx-mini{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:max-content;
+  max-width:100%;
+  border-radius:999px;
+  background:#1a284c;
+  color:#9db8ff;
+  font-weight:650;
+  text-transform:uppercase;
+}
+.vx-pill{
+  min-height:29px;
+  gap:8px;
+  padding:5px 12px;
+  font-size:11px;
+  letter-spacing:.035em;
+}
+.vx-pill .dot{
+  width:6px;
+  height:6px;
+  flex:none;
+  border-radius:50%;
+  background:#4775ff;
+}
+.vx-mini{
+  min-height:25px;
+  padding:5px 11px;
+  font-size:10.5px;
+  line-height:1.2;
+  letter-spacing:.055em;
+}
+
+/* Voxel home */
+.vx-hero{
+  display:flex;
+  min-height:calc(100dvh - 64px);
+  flex-direction:column;
+  justify-content:center;
+}
+.vx-hero h1{
+  max-width:720px;
+  margin-top:19px;
+  font-size:clamp(2.05rem,4.2vw,3.35rem);
+  font-weight:720;
+  line-height:1.06;
+  letter-spacing:-.045em;
+  text-wrap:balance;
+}
+.vx-lead{
+  max-width:650px;
+  margin-top:18px;
+  color:#b9bdc6;
+  font-size:clamp(14.5px,1.25vw,16.5px);
+  line-height:1.72;
+}
+.vx-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:28px;
+}
+.vx-btn{
+  min-height:44px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:0 19px;
+  border:1px solid transparent;
+  border-radius:10px;
+  color:#f4f5f7;
+  font-size:14px;
+  font-weight:550;
+  line-height:1;
+  text-decoration:none;
+  cursor:pointer;
+  transition:background .18s,border-color .18s,color .18s,transform .18s;
+}
+.vx-btn:active{transform:translateY(1px)}
+.vx-btn.primary{background:#3969f7;color:#fff}
+.vx-btn.primary:hover{background:#4a77fb}
+.vx-btn.secondary{background:#17181b;border-color:#34363c;color:#f4f5f7}
+.vx-btn.secondary:hover{background:#202126;border-color:#464952}
+.vx-facts{
+  width:min(100%,820px);
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  margin-top:36px;
+  border-top:1px solid #292b30;
+  border-bottom:1px solid #292b30;
+}
+.vx-facts span{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  padding:15px 16px;
+  color:#7f848e;
+  font-size:11px;
+  line-height:1.45;
+}
+.vx-facts span:first-child{padding-left:0}
+.vx-facts span+span{border-left:1px solid #292b30}
+.vx-facts b{
+  overflow-wrap:anywhere;
+  color:#e9ebef;
+  font-size:12.5px;
+  font-weight:620;
+  letter-spacing:-.01em;
+}
+
+/* Information page */
+#voxel-info .vx-body{
+  width:min(100%,1040px);
+  margin-inline:auto;
+}
+.vx-head{
+  width:min(100%,760px);
+}
+.vx-head h1{
+  max-width:720px;
+  margin-top:14px;
+  font-size:clamp(1.85rem,3.2vw,2.65rem);
+  font-weight:720;
+  line-height:1.08;
+  letter-spacing:-.038em;
+  text-wrap:balance;
+}
+.vx-head p{
+  max-width:680px;
+  margin-top:14px;
+  color:#b9bdc6;
+  font-size:clamp(14px,1.15vw,16px);
+  line-height:1.72;
+}
+.vx-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+  margin-top:30px;
+}
+.vx-card{
+  min-width:0;
+  min-height:166px;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  padding:20px;
+  border:1px solid #2c2e34;
+  border-radius:15px;
+  background:#17181b;
+  box-shadow:0 1px 0 rgba(255,255,255,.018) inset;
+}
+.vx-card h3{
+  margin-top:13px;
+  font-size:15px;
+  font-weight:650;
+  line-height:1.25;
+  letter-spacing:-.012em;
+}
+.vx-card p{
+  margin-top:9px;
+  color:#afb3bc;
+  font-size:13.5px;
+  line-height:1.65;
+}
+.vx-foot{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  margin-top:32px;
+  padding-top:16px;
+  border-top:1px solid #292b30;
+  color:#737883;
+  font-size:11.5px;
+}
+
+/* Support page */
+.vx-support-shell{
+  width:min(100%,760px);
+  margin:0 auto;
+  padding:clamp(30px,5vh,48px) clamp(20px,4vw,36px) clamp(48px,8vh,78px);
+}
+.vx-support-top h1{
+  max-width:620px;
+  margin-top:12px;
+  font-size:clamp(1.85rem,3.1vw,2.45rem);
+  font-weight:720;
+  line-height:1.08;
+  letter-spacing:-.038em;
+  text-wrap:balance;
+}
+.vx-support-top p{
+  max-width:650px;
+  margin-top:12px;
+  color:#b9bdc6;
+  font-size:14.5px;
+  line-height:1.7;
+}
+.vx-support-box{
+  margin-top:24px;
+  overflow:hidden;
+  border:1px solid #2c2e34;
+  border-radius:16px;
+  background:#17181b;
+  box-shadow:0 18px 56px rgba(0,0,0,.18);
+}
+.vx-support-bot{
+  display:flex;
+  align-items:flex-start;
+  gap:13px;
+  padding:17px;
+  border-bottom:1px solid #292b30;
+  background:linear-gradient(180deg,#1a1b1f,#17181b);
+}
+.vx-support-avatar{
+  width:38px;
+  height:38px;
+  flex:none;
+  display:grid;
+  place-items:center;
+  border:1px solid #2d3036;
+  border-radius:10px;
+  background:#101114;
+}
+.vx-support-avatar .vx-mark{width:20px;height:20px}
+.vx-support-avatar .vx-mark i{width:8px;height:8px}
+.vx-support-botname{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:7px;
+  color:#f1f2f5;
+  font-size:12.5px;
+  font-weight:620;
+}
+.vx-support-botname span{
+  padding:2px 7px;
+  border-radius:999px;
+  background:#1a284c;
+  color:#9db8ff;
+  font-size:9px;
+  font-weight:650;
+  letter-spacing:.07em;
+  text-transform:uppercase;
+}
+.vx-support-bot p{
+  margin-top:5px;
+  color:#aeb2bb;
+  font-size:12.8px;
+  line-height:1.62;
+}
+.vx-form{padding:17px}
+.vx-field{
+  display:block;
+  margin-bottom:15px;
+}
+.vx-field:last-of-type{margin-bottom:0}
+.vx-fieldlabel{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:7px;
+  color:#c2c5cc;
+  font-size:11.5px;
+  font-weight:550;
+}
+.vx-fieldlabel small{
+  flex:none;
+  color:#777c86;
+  font-size:10.5px;
+  font-weight:450;
+}
+.vx-input,.vx-textarea,.vx-select{
+  width:100%;
+  border:1px solid #353840;
+  border-radius:10px;
+  outline:none;
+  background:#111216;
+  color:#f4f5f7;
+  font-size:14px;
+  transition:border-color .18s,box-shadow .18s,background .18s;
+}
+.vx-input,.vx-select{
+  height:44px;
+  padding:0 12px;
+}
+.vx-select{
+  appearance:none;
+  padding-right:38px;
+  background-image:
+    linear-gradient(45deg,transparent 50%,#858a94 50%),
+    linear-gradient(135deg,#858a94 50%,transparent 50%);
+  background-position:
+    calc(100% - 18px) 18px,
+    calc(100% - 13px) 18px;
+  background-size:5px 5px,5px 5px;
+  background-repeat:no-repeat;
+}
+.vx-select option{background:#121316;color:#f4f5f7}
+.vx-context{
+  display:block;
+  margin-top:7px;
+  color:#777c86;
+  font-size:10.8px;
+  line-height:1.5;
+}
+.vx-textarea{
+  min-height:140px;
+  padding:11px 12px;
+  resize:vertical;
+  line-height:1.58;
+}
+.vx-input::placeholder,.vx-textarea::placeholder{color:#666b75}
+.vx-input:focus,.vx-textarea:focus,.vx-select:focus{
+  border-color:#4775ff;
+  background-color:#13151a;
+  box-shadow:0 0 0 3px rgba(71,117,255,.12);
+}
+.vx-upload{
+  min-height:78px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:14px;
+  border:1px dashed #40434b;
+  border-radius:12px;
+  background:#131417;
+  cursor:pointer;
+  transition:border-color .18s,background .18s;
+}
+.vx-upload:hover,.vx-upload.drag,.vx-upload.has-files{
+  border-color:#5d79d9;
+  background:#161a25;
+}
+.vx-uploadicon{
+  width:34px;
+  height:34px;
+  flex:none;
+  display:grid;
+  place-items:center;
+  border-radius:9px;
+  background:#222328;
+  color:#c1c4ca;
+  font-size:17px;
+}
+.vx-uploadcopy{min-width:0}
+.vx-uploadcopy b{
+  display:block;
+  color:#f4f5f7;
+  font-size:12.5px;
+  font-weight:550;
+}
+.vx-uploadcopy span{
+  display:block;
+  margin-top:2px;
+  color:#7d828c;
+  font-size:10.8px;
+  line-height:1.45;
+}
+.vx-uploadinput{display:none}
+.vx-support-privacy{
+  max-width:590px;
+  margin-top:17px;
+  color:#747983;
+  font-size:10.8px;
+  line-height:1.55;
+}
+.vx-support-footer{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  margin-top:18px;
+  padding-top:16px;
+  border-top:1px solid #292b30;
+}
+.vx-status{
+  min-width:0;
+  min-height:18px;
+  color:#7f848e;
+  font-size:11px;
+  font-weight:500;
+  line-height:1.45;
+}
+.vx-status.error{color:#f0aeb7}
+.vx-status.success{color:#acd9b8}
+
+/* Laptop and tablet */
+@media (max-width:1024px){
+  .vx-screen .vx-wrap{width:min(100%,960px);padding-inline:clamp(20px,4vw,36px)}
+  #voxel-info .vx-body{width:min(100%,900px)}
+  .vx-hero h1{max-width:660px}
+}
+
+/* Tablet */
+@media (max-width:760px){
+  .vx-bar,.vx-bar .vx-wrap{min-height:60px}
+  .vx-screen .vx-wrap{padding-inline:20px}
+  .vx-body{padding-block:34px 52px}
+  .vx-hero{min-height:calc(100dvh - 60px)}
+  .vx-hero h1{font-size:clamp(1.9rem,8vw,2.75rem)}
+  .vx-actions{margin-top:24px}
+  .vx-facts{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    margin-top:30px;
+  }
+  .vx-facts span{padding:13px 14px}
+  .vx-facts span:first-child{padding-left:0}
+  .vx-facts span:nth-child(3){
+    padding-left:0;
+    border-top:1px solid #292b30;
+    border-left:0;
+  }
+  .vx-facts span:nth-child(4){border-top:1px solid #292b30}
+  .vx-grid{grid-template-columns:1fr;gap:10px;margin-top:24px}
+  .vx-card{min-height:0;padding:18px}
+  .vx-foot{margin-top:26px}
+  .vx-support-shell{padding-top:30px}
+}
+
+/* Phones */
+@media (max-width:520px){
+  .vx-screen{font-size:14px}
+  .vx-screen .vx-wrap{padding-inline:16px}
+  .vx-bar,.vx-bar .vx-wrap{min-height:56px}
+  .vx-brand{font-size:14px}
+  .vx-mark{width:17px;height:17px}
+  .vx-close,.vx-back{
+    min-width:66px;
+    height:36px;
+    padding-inline:12px;
+    border-radius:10px;
+    font-size:12px;
+  }
+  .vx-body{padding-block:28px 42px}
+  .vx-hero{min-height:calc(100dvh - 56px);justify-content:flex-start;padding-top:clamp(42px,8vh,72px)}
+  .vx-hero h1{
+    max-width:100%;
+    margin-top:16px;
+    font-size:clamp(1.9rem,10vw,2.45rem);
+    line-height:1.08;
+  }
+  .vx-lead{margin-top:14px;font-size:14px;line-height:1.65}
+  .vx-actions{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:8px;
+    width:100%;
+    margin-top:22px;
+  }
+  .vx-btn{width:100%;min-height:43px}
+  .vx-facts{
+    grid-template-columns:1fr;
+    margin-top:26px;
+  }
+  .vx-facts span,
+  .vx-facts span:first-child,
+  .vx-facts span:nth-child(3){
+    padding:11px 0;
+    border-left:0;
+    border-top:1px solid #292b30;
+  }
+  .vx-facts span:first-child{border-top:0}
+  .vx-head h1,.vx-support-top h1{
+    max-width:100%;
+    font-size:clamp(1.75rem,8.5vw,2.2rem);
+  }
+  .vx-head p,.vx-support-top p{font-size:13.5px;line-height:1.65}
+  .vx-grid{margin-top:22px}
+  .vx-card{padding:16px;border-radius:13px}
+  .vx-card h3{font-size:14.5px}
+  .vx-card p{font-size:13px}
+  .vx-foot{
+    align-items:flex-start;
+    flex-direction:column;
+    gap:4px;
+    margin-top:24px;
+  }
+  .vx-support-shell{
+    width:100%;
+    padding:26px 14px 44px;
+  }
+  .vx-support-box{border-radius:14px}
+  .vx-support-bot{padding:14px}
+  .vx-support-avatar{width:35px;height:35px}
+  .vx-support-bot p{font-size:12.2px}
+  .vx-form{padding:14px}
+  .vx-fieldlabel{
+    align-items:flex-start;
+    flex-direction:column;
+    gap:2px;
+  }
+  .vx-fieldlabel small{font-size:10px}
+  .vx-input,.vx-select{height:43px}
+  .vx-textarea{min-height:132px}
+  .vx-upload{align-items:flex-start;padding:13px}
+  .vx-uploadcopy span{font-size:10.4px}
+  .vx-support-footer{
+    align-items:stretch;
+    flex-direction:column;
+  }
+  .vx-support-footer .vx-btn{width:100%}
+}
+
+/* Very small phones */
+@media (max-width:360px){
+  .vx-screen .vx-wrap{padding-inline:13px}
+  .vx-brand{gap:9px}
+  .vx-actions{gap:7px}
+  .vx-pill,.vx-mini{font-size:9.5px}
+  .vx-card{padding:14px}
+  .vx-support-shell{padding-inline:12px}
+}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  .reveal{opacity:1;transform:none}
+}
+</style>
+</head>
+
+<body>
+<div class="grao"></div>
+
+<!-- ================= BARRA DA PLATAFORMA ================= -->
+<div class="voxel-bar">
+  <div class="wrap voxel-bar-in">
+    <button class="vb-marca vb-botao" type="button" data-open-voxel aria-label="Abrir painel do Voxel">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <path d="M32 11 53 32 32 53 11 32Z" fill="#EDEDEF" stroke="#EDEDEF" stroke-width="9" stroke-linejoin="round"/>
+        <path d="M32 25 39 32 32 39 25 32Z" fill="#0E0F11" stroke="#0E0F11" stroke-width="6" stroke-linejoin="round"/>
+      </svg>
+      <b>Voxel</b>
+    </button>
+
+    <nav class="vb-trilha" aria-label="Localização na plataforma">
+      <span>Comunidades</span><i>/</i><span>Militar</span><i>/</i><strong>Exército Brasileiro</strong>
+    </nav>
+
+    <div class="vb-dir">
+      <span class="vb-status">Comunidade verificada</span>
+      <button type="button" data-suporte>Suporte</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= CABEÇALHO ================= -->
+<header class="topo">
+  <div class="wrap topo-in">
+    <a class="brasao" href="#hero" aria-label="Início">
+      <svg viewBox="0 0 40 40" aria-hidden="true">
+        <path d="M20 2 36 9v13c0 8-7 13.5-16 16C11 35.5 4 30 4 22V9Z" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".75"/>
+        <path d="M11 24 20 15l9 9" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M20 8.5l1.7 3.9 4.2.3-3.2 2.7 1 4.1-3.7-2.2-3.7 2.2 1-4.1-3.2-2.7 4.2-.3Z" fill="#B08D2E"/>
+      </svg>
+      <span><b>Exército Brasileiro</b><span>Comando Geral · Roblox</span></span>
+    </a>
+
+    <nav class="menu">
+      <a href="#doutrina">Doutrina</a>
+      <a href="#unidades">Subdivisões</a>
+      <a href="#hierarquia">Hierarquia</a>
+      <a href="#parceria">Parceria</a>
+      <a href="#alistamento">Alistamento</a>
+      <a class="btn" href="#alistamento" data-ima>Alistar-se</a>
+    </nav>
+
+    <button class="hamb" id="hamb" aria-label="Abrir menu" aria-expanded="false"><i></i><i></i></button>
+  </div>
+</header>
+
+<nav class="gaveta" id="gaveta" aria-hidden="true">
+  <a href="#doutrina"><small>01</small>Doutrina</a>
+  <a href="#unidades"><small>02</small>Subdivisões</a>
+  <a href="#hierarquia"><small>03</small>Hierarquia</a>
+  <a href="#parceria"><small>04</small>Parceria</a>
+  <a href="#alistamento"><small>05</small>Alistamento</a>
+  <a href="#disciplina"><small>06</small>Disciplina</a>
+  <a href="#duvidas"><small>07</small>Dúvidas</a>
+</nav>
+
+<main>
+<!-- ================= HERO ================= -->
+<section class="hero" id="hero">
+  <svg id="topo-mapa" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true"></svg>
+
+  <div class="hud" aria-hidden="true">
+    <span class="canto tl"></span><span class="canto tr"></span>
+    <span class="canto bl"></span><span class="canto br"></span>
+    <span class="coord tag">22°54'S 043°10'W · SETOR ALFA · ALT. 812M</span>
+  </div>
+
+  <div class="wrap hero-in">
+    <p class="eyebrow tag" data-split="words">Força Terrestre · Simulação militar no Roblox · Desde 2019</p>
+
+    <h1 class="titulo">
+      <span class="linha"><em>Exército</em></span>
+      <span class="linha"><em class="fino">Brasileiro</em></span>
+    </h1>
+
+    <div class="hero-baixo">
+      <p data-split="words">Instrução de recrutas, batalhões com missão definida e operações toda semana. Aqui a patente é conquistada em formatura, não distribuída no chat.</p>
+      <div class="hero-acoes">
+        <button class="btn solido" type="button" data-ima>Iniciar alistamento</button>
+        <a class="btn" href="#hierarquia" data-ima>Ver hierarquia</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="faixa" aria-hidden="true">
+  <div class="faixa-in" id="faixa-in"></div>
+</div>
+
+<!-- ================= 01 DOUTRINA ================= -->
+<section class="secao" id="doutrina">
+  <div class="wrap">
+    <div class="secao-cab">
+      <span class="num">SEÇÃO 01</span><span class="nome">Doutrina</span><span class="fio"></span><span class="nome">CG-EB/2019</span>
+    </div>
+
+    <div class="doutrina">
+      <h2 class="reveal">Braço forte,<br><span class="ouro">mão amiga</span></h2>
+
+      <div class="texto">
+        <p class="destaque reveal">Somos uma comunidade de simulação militar levada a sério: uniforme padronizado, cadeia de comando funcional e treinamento antes de qualquer operação.</p>
+        <p class="reveal">O efetivo é dividido em cinco subdivisões, cada uma com instrução própria e comandante responsável. Recrutas passam pelo CIGS antes de receber a primeira graduação · ninguém entra direto em missão.</p>
+        <p class="reveal">Nossas operações acontecem em horário fixo, com briefing, ordem de operações e relatório pós-ação. Quem comparece, evolui. Quem falta sem justificativa, retorna ao fim da fila.</p>
+
+        <div class="pilares">
+          <div class="pilar reveal"><span class="cod">P-01</span><div><h4>Hierarquia</h4><p>A ordem do superior é cumprida primeiro e questionada depois, pelo canal correto.</p></div></div>
+          <div class="pilar reveal"><span class="cod">P-02</span><div><h4>Instrução</h4><p>Toda promoção exige curso concluído e presença comprovada em formatura.</p></div></div>
+          <div class="pilar reveal"><span class="cod">P-03</span><div><h4>Padronização</h4><p>Uniforme, comunicação por rádio e nomenclatura seguem o manual interno.</p></div></div>
+          <div class="pilar reveal"><span class="cod">P-04</span><div><h4>Presença</h4><p>Efetivo inativo por 21 dias é transferido para a reserva automaticamente.</p></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="numeros">
+      <div class="numero reveal"><div class="v"><span data-count="19">0</span></div><div class="l tag">Postos hierárquicos</div></div>
+      <div class="numero reveal"><div class="v"><span data-count="4">0</span></div><div class="l tag">Círculos de comando</div></div>
+      <div class="numero reveal"><div class="v"><span data-count="5">0</span></div><div class="l tag">Subdivisões ativas</div></div>
+      <div class="numero reveal"><div class="v"><span data-count="4">0</span><span>x</span></div><div class="l tag">Formaturas por semana</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 02 UNIDADES ================= -->
+<section class="secao unidades" id="unidades">
+  <div class="wrap">
+    <div class="secao-cab">
+      <span class="num">SEÇÃO 02</span><span class="nome">Organização</span><span class="fio"></span><span class="nome">Quadro de efetivo</span>
+    </div>
+    <h2 class="reveal">Cinco subdivisões, cada uma com missão e instrução próprias</h2>
+  </div>
+
+  <div class="trilho" id="trilho">
+    <article class="ficha">
+      <div class="sigla"><span>BAC |EB|</span><span>01</span></div>
+      <h3>Batalhão de Ações de Comandos</h3>
+      <p class="lema">Ação direta</p>
+      <p>Conduz assalto a posições fortificadas, tomada de estruturas e operações de choque em apoio ao restante do efetivo.</p>
+      <ul><li>Assalto</li><li>Ação direta</li><li>Entrada por aprovação</li></ul>
+    </article>
+
+    <article class="ficha">
+      <div class="sigla"><span>BFE |EB|</span><span>02</span></div>
+      <h3>Batalhão de Forças Especiais</h3>
+      <p class="lema">Seleção permanente</p>
+      <p>Unidade de acesso restrito. Reconhecimento profundo, resgate e missões de baixa visibilidade. Ingresso somente por seleção interna.</p>
+      <ul><li>Infiltração</li><li>Resgate</li><li>Seleção interna</li></ul>
+    </article>
+
+    <article class="ficha">
+      <div class="sigla"><span>BPE |EB|</span><span>03</span></div>
+      <h3>Batalhão de Polícia do Exército</h3>
+      <p class="lema">Ordem na tropa</p>
+      <p>Fiscaliza uniforme, conduta e regulamento em formaturas e no quartel. Conduz sindicâncias e aplica sanções disciplinares.</p>
+      <ul><li>Disciplina</li><li>Guarda</li><li>Sindicância</li></ul>
+    </article>
+
+    <article class="ficha">
+      <div class="sigla"><span>CIGS |EB|</span><span>04</span></div>
+      <h3>Centro de Instrução de Guerra na Selva</h3>
+      <p class="lema">Selva, Guerreiro</p>
+      <p>Porta de entrada obrigatória. Ministra o treinamento básico, avalia o recruta e o encaminha à subdivisão compatível com seu desempenho.</p>
+      <ul><li>Treinamento</li><li>Avaliação</li><li>Turmas diárias</li></ul>
+    </article>
+
+    <article class="ficha">
+      <div class="sigla"><span>CIE |EB|</span><span>05</span></div>
+      <h3>Centro de Inteligência do Exército</h3>
+      <p class="lema">Informação antes da ordem</p>
+      <p>Levanta dados de setor, monitora atividade externa e prepara o briefing que antecede cada operação do efetivo.</p>
+      <ul><li>Reconhecimento</li><li>Briefing</li><li>Contrainteligência</li></ul>
+    </article>
+  </div>
+
+  <div class="wrap"><p class="arraste tag" aria-hidden="true">↔ Role para percorrer o quadro</p></div>
+</section>
+
+<!-- ================= 03 HIERARQUIA ================= -->
+<section class="secao" id="hierarquia">
+  <div class="wrap">
+    <div class="secao-cab">
+      <span class="num">SEÇÃO 03</span><span class="nome">Hierarquia</span><span class="fio"></span><span class="nome">Círculos e postos</span>
+    </div>
+    <div class="escada" id="escada"></div>
+  </div>
+</section>
+
+<!-- ================= 04 PARCERIA ================= -->
+<section class="secao parceria" id="parceria">
+  <div class="wrap">
+    <div class="secao-cab">
+      <span class="num">SEÇÃO 04</span><span class="nome">Parceria oficial</span><span class="fio"></span><span class="nome">Voxel · 2026</span>
+    </div>
+
+    <div class="parceria-grid">
+      <aside class="painel-voxel reveal">
+        <div class="voxel-marca">
+          <svg id="marca-voxel" viewBox="0 0 64 64" aria-hidden="true">
+            <path d="M32 11 53 32 32 53 11 32Z" fill="#EDEDEF" stroke="#EDEDEF" stroke-width="8" stroke-linejoin="round"/>
+            <path d="M32 25 39 32 32 39 25 32Z" fill="#0E0F11" stroke="#0E0F11" stroke-width="5" stroke-linejoin="round"/>
+          </svg>
+          <span><b>Voxel</b><span>Roblox communities</span></span>
+        </div>
+
+        <p class="desc">Comunidades, cargos, membros e Discord. Tudo em um só lugar.</p>
+
+        <div class="voxel-estado">
+          <div><span>Registro</span><b>EB-001</b></div>
+          <div><span>Cargos sincronizados</span><b>19</b></div>
+          <div><span>Discord</span><b>Integrado</b></div>
+          <div><span>Status</span><b>Ativa</b></div>
+        </div>
+
+        <div class="voxel-acoes">
+          <button type="button" class="btn voxel-ir" data-open-voxel>Abrir Voxel</button>
+          <a class="btn voxel-discord" href="https://discord.gg/hMkkqXPUk" target="_blank" rel="noopener">Discord oficial</a>
+        </div>
+      </aside>
+
+      <div class="parceria-texto">
+        <h2 class="reveal">Efetivo administrado pela plataforma Voxel</h2>
+        <p class="reveal">O Voxel centraliza a gestão da comunidade dentro e fora do jogo. Cargos, permissões, entrada de militares e registros ficam em uma estrutura única, conectada ao Discord · sem planilha paralela e sem promoção anotada no papel.</p>
+
+        <div class="recursos">
+          <div class="recurso reveal"><span class="k">Comunidades</span><p>Criação, descoberta e gestão da estrutura da comunidade em um só painel.</p></div>
+          <div class="recurso reveal"><span class="k">Cargos</span><p>Hierarquia e permissões espelhando os círculos de praças, graduados e oficiais.</p></div>
+          <div class="recurso reveal"><span class="k">Membros</span><p>Entradas, solicitações de alistamento e organização do efetivo por subdivisão.</p></div>
+          <div class="recurso reveal"><span class="k">Discord</span><p>Integração com as operações externas: formaturas, avisos e registros pós-ação.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 05 ALISTAMENTO ================= -->
+<section class="secao alistamento" id="alistamento">
+  <div class="carimbo" id="carimbo">Documento de<b>Uso Interno</b>CG-EB</div>
+  <div class="wrap">
+    <div class="secao-cab">
+      <span class="num">SEÇÃO 05</span><span class="nome">Alistamento</span><span class="fio"></span><span class="nome">Aberto</span>
+    </div>
+
+    <div class="etapas">
+      <span class="avanco" id="avanco"></span>
+      <div class="etapa reveal"><div class="n">01</div><h4>Solicite entrada</h4><p>Peça acesso à comunidade Exército Brasileiro |EB| pelo Voxel. A entrada é liberada por aprovação.</p><span class="prazo tag">Aprovação manual</span></div>
+      <div class="etapa reveal"><div class="n">02</div><h4>Leia o regulamento</h4><p>No Discord, confirme a leitura do regulamento disciplinar e receba o cargo de Recruta.</p><span class="prazo tag">5 minutos</span></div>
+      <div class="etapa reveal"><div class="n">03</div><h4>Apresente-se ao CIGS</h4><p>Compareça a uma turma do Centro de Instrução de Guerra na Selva com uniforme padrão e microfone opcional.</p><span class="prazo tag">Turmas diárias</span></div>
+      <div class="etapa reveal"><div class="n">04</div><h4>Conclua a instrução</h4><p>Aprovado no exame prático, você é graduado Soldado e designado a uma subdivisão.</p><span class="prazo tag">Até 3 dias</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 06 DISCIPLINA ================= -->
+<section class="secao" id="disciplina">
+  <div class="wrap">
+    <div class="secao-cab">
+      <span class="num">SEÇÃO 06</span><span class="nome">Disciplina</span><span class="fio"></span><span class="nome">Regulamento interno</span>
+    </div>
+
+    <div class="artigos">
+      <div class="artigo reveal"><span class="id">Art. 1º</span><div><h4>Respeito à cadeia de comando</h4><p>Ordens são cumpridas de imediato. Discordância é registrada após a execução, junto ao comandante da subdivisão ou ao BPE.</p></div></div>
+      <div class="artigo reveal"><span class="id">Art. 2º</span><div><h4>Uniforme padronizado</h4><p>É obrigatório o uso do uniforme da subdivisão em formaturas e operações. Acessórios não previstos no manual são vedados.</p></div></div>
+      <div class="artigo reveal"><span class="id">Art. 3º</span><div><h4>Proibição de exploits</h4><p>Qualquer manipulação do jogo resulta em exclusão permanente da comunidade e comunicação à moderação do Roblox.</p></div></div>
+      <div class="artigo reveal"><span class="id">Art. 4º</span><div><h4>Comunicação por rádio</h4><p>Canais operacionais são restritos a mensagens de serviço, com identificação de indicativo e subdivisão.</p></div></div>
+      <div class="artigo reveal"><span class="id">Art. 5º</span><div><h4>Conduta entre militares</h4><p>Ofensa, discriminação ou assédio contra qualquer integrante é falta grave, sem direito a reincidência.</p></div></div>
+      <div class="artigo reveal"><span class="id">Art. 6º</span><div><h4>Assiduidade</h4><p>Ausência superior a 21 dias sem justificativa transfere o militar à reserva, com perda do posto na retomada.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 07 DÚVIDAS ================= -->
+<section class="secao" id="duvidas">
+  <div class="wrap">
+    <div class="secao-cab">
+      <span class="num">SEÇÃO 07</span><span class="nome">Dúvidas frequentes</span><span class="fio"></span>
+    </div>
+
+    <div class="faq" id="faq">
+      <div class="item"><button aria-expanded="false"><span>Preciso ter microfone para entrar?</span><i class="mais"></i></button><div class="resp"><p>Não. O microfone é exigido apenas para funções de comando e para o curso de observador avançado. Recrutas e soldados operam normalmente por texto.</p></div></div>
+      <div class="item"><button aria-expanded="false"><span>Existe idade mínima?</span><i class="mais"></i></button><div class="resp"><p>Não exigimos idade mínima, mas a conduta cobrada é a mesma para todos. Quem não sustenta o regulamento é desligado, independentemente do tempo de casa.</p></div></div>
+      <div class="item"><button aria-expanded="false"><span>Quanto tempo leva para ser promovido?</span><i class="mais"></i></button><div class="resp"><p>Depende de presença e de cursos concluídos. Em média, um soldado assíduo alcança Cabo em duas semanas e 3º Sargento em cerca de dois meses.</p></div></div>
+      <div class="item"><button aria-expanded="false"><span>Posso escolher minha subdivisão?</span><i class="mais"></i></button><div class="resp"><p>Você indica a preferência no fim da instrução. A designação final considera desempenho no exame prático e vagas abertas na subdivisão.</p></div></div>
+      <div class="item"><button aria-expanded="false"><span>Como entro no Batalhão de Forças Especiais?</span><i class="mais"></i></button><div class="resp"><p>Somente por seleção interna, aberta a partir da graduação de Cabo, com no mínimo 30 dias de efetivo serviço e nenhuma sanção disciplinar registrada.</p></div></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- ================= RODAPÉ ================= -->
+<footer class="rodape">
+  <div class="wrap">
+    <div class="rodape-grid">
+      <div class="sobre">
+        <h5>Comando Geral</h5>
+        <p>Comunidade de simulação militar no Roblox, com efetivo organizado em cinco subdivisões, hierarquia de 19 postos e instrução contínua de recrutas.</p>
+      </div>
+      <div><h5>Institucional</h5><ul><li><a href="#doutrina">Doutrina</a></li><li><a href="#unidades">Subdivisões</a></li><li><a href="#hierarquia">Hierarquia</a></li></ul></div>
+      <div><h5>Efetivo</h5><ul><li><a href="#alistamento">Alistamento</a></li><li><a href="#disciplina">Regulamento</a></li><li><a href="#duvidas">Dúvidas</a></li></ul></div>
+      <div><h5>Canais</h5><ul><li><a href="https://discord.gg/hMkkqXPUk" target="_blank" rel="noopener">Servidor no Discord</a></li><li><button class="link-suporte" type="button" data-open-voxel>Comunidade no Voxel</button></li><li><button class="link-suporte" data-suporte>Suporte Voxel</button></li></ul></div>
+    </div>
+
+    <div class="base">
+      <p>© 2026 Comando Geral · Gestão de comunidade por Voxel</p>
+      <p>Projeto de entretenimento no Roblox, sem vínculo com o Exército Brasileiro real</p>
+    </div>
+  </div>
+</footer>
+
+
+<section class="vx-screen" id="voxel-app" aria-hidden="true">
+  <div class="vx-bar">
+    <div class="vx-wrap">
+      <div class="vx-brand"><span class="vx-mark"><i></i></span> Voxel</div>
+      <span class="vx-spacer"></span>
+      <button type="button" class="vx-close" id="vx-close-home">Fechar</button>
+    </div>
+  </div>
+  <div class="vx-scroll">
+    <div class="vx-body vx-wrap vx-hero">
+      <span class="vx-pill"><span class="dot"></span> Sistema de comunidades</span>
+      <h1>Comunidades, cargos e membros dentro do seu jogo.</h1>
+      <p class="vx-lead">O Voxel entrega a estrutura pronta do Exército Brasileiro dentro e fora do jogo. Comunidades, cargos, membros, recompensas, verificação e Discord ficam no mesmo ecossistema.</p>
+      <div class="vx-actions">
+        <button type="button" class="vx-btn secondary" id="vx-btn-support">Suporte</button>
+        <button type="button" class="vx-btn primary" id="vx-btn-info">Informações</button>
+        <a class="vx-btn secondary" href="https://discord.gg/hMkkqXPUk" target="_blank" rel="noopener">Discord oficial</a>
+      </div>
+      <div class="vx-facts">
+        <span><b>1</b> comunidade principal conectada</span>
+        <span><b>19</b> cargos sincronizados</span>
+        <span><b>Discord</b> integrado ao jogo</span>
+        <span><b>Firebase</b> persistência ativa</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="vx-screen" id="voxel-info" aria-hidden="true">
+  <div class="vx-bar">
+    <div class="vx-wrap">
+      <div class="vx-brand"><span class="vx-mark"><i></i></span> Voxel</div>
+      <span class="vx-spacer"></span>
+      <button type="button" class="vx-back" id="vx-back-info">Voltar</button>
+    </div>
+  </div>
+  <div class="vx-scroll">
+    <div class="vx-body vx-wrap vx-info-body">
+      <div class="vx-head">
+        <span class="vx-mini">Informações</span>
+        <h1>Um painel pensado para a rotina da comunidade.</h1>
+        <p>O Voxel concentra as ferramentas principais do Exército Brasileiro em uma única camada. O objetivo é reduzir trabalho manual, manter a hierarquia sincronizada e facilitar a moderação da comunidade.</p>
+      </div>
+      <div class="vx-grid">
+        <article class="vx-card">
+          <span class="vx-mini">Comunidades</span>
+          <h3>Gestão centralizada</h3>
+          <p>Criação, descoberta e administração da comunidade em uma única interface, com regras e estruturas organizadas por setor.</p>
+        </article>
+        <article class="vx-card">
+          <span class="vx-mini">Cargos</span>
+          <h3>Hierarquia sincronizada</h3>
+          <p>Postos, divisões, permissões e apelidos padronizados ficam alinhados entre jogo, Discord e serviços externos.</p>
+        </article>
+        <article class="vx-card">
+          <span class="vx-mini">Membros</span>
+          <h3>Entrada e progressão</h3>
+          <p>Pedidos de entrada, verificação, recompensas, perfis e histórico de atividade ficam ligados ao mesmo registro do militar.</p>
+        </article>
+        <article class="vx-card">
+          <span class="vx-mini">Segurança</span>
+          <h3>Moderação e proteção</h3>
+          <p>Ferramentas para advertência, banimentos, anti raid, anti nuke e organização operacional do servidor de Discord.</p>
+        </article>
+      </div>
+      <div class="vx-foot">
+        <span>Voxel 2026</span>
+        <span>Sistema de comunidades para Roblox</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="vx-screen" id="voxel-support" aria-hidden="true">
+  <div class="vx-bar">
+    <div class="vx-wrap">
+      <div class="vx-brand"><span class="vx-mark"><i></i></span> Voxel</div>
+      <span class="vx-spacer"></span>
+      <button type="button" class="vx-back" id="vx-back-support">Voltar</button>
+    </div>
+  </div>
+  <div class="vx-scroll">
+    <div class="vx-support-shell">
+      <div class="vx-support-top">
+        <span class="vx-mini">Suporte e denúncias</span>
+        <h1>Como podemos ajudar?</h1>
+        <p>Use este canal para relatar erros, falhas, problemas de acesso ou conduta inadequada. Em denúncias, envie o máximo de contexto possível para que a equipe consiga analisar o caso corretamente.</p>
+      </div>
+      <div class="vx-support-box">
+        <div class="vx-support-bot">
+          <div class="vx-support-avatar"><span class="vx-mark"><i></i></span></div>
+          <div>
+            <div class="vx-support-botname">Voxel Support <span>app</span></div>
+            <p>Para suporte técnico, explique o que aconteceu e como reproduzir. Para denúncias, informe quem está sendo denunciado, o motivo, quando ocorreu e anexe provas como prints, imagens ou links de mensagens quando disponíveis.</p>
+          </div>
+        </div>
+        <div class="vx-form">
+          <label class="vx-field">
+            <span class="vx-fieldlabel">Tipo da solicitação <small>Obrigatório</small></span>
+            <select id="vx-sup-tipo" class="vx-select">
+              <option value="Suporte técnico">Suporte técnico</option>
+              <option value="Denúncia">Denúncia</option>
+              <option value="Dúvida ou outro assunto">Dúvida ou outro assunto</option>
+            </select>
+            <span class="vx-context" id="vx-sup-contexto">Erros, falhas, problemas de acesso ou comportamento inesperado.</span>
+          </label>
+          <label class="vx-field">
+            <span class="vx-fieldlabel">Seu nome ou usuário <small>Obrigatório</small></span>
+            <input id="vx-sup-usuario" class="vx-input" type="text" maxlength="60" placeholder="ex.: [CB] Nome do militar" autocomplete="off">
+          </label>
+          <label class="vx-field">
+            <span class="vx-fieldlabel">Relato <small><span id="vx-sup-contador">0</span> / 1800</small></span>
+            <textarea id="vx-sup-problema" class="vx-textarea" maxlength="1800" placeholder="Descreva tudo que a equipe precisa saber para analisar a solicitação."></textarea>
+          </label>
+          <label class="vx-field">
+            <span class="vx-fieldlabel">Imagens <small>Até 4 imagens, 5 MB por arquivo</small></span>
+            <div class="vx-upload" id="vx-sup-solta" tabindex="0" role="button">
+              <div class="vx-uploadicon">↑</div>
+              <div class="vx-uploadcopy"><b>Adicionar prints ou imagens</b><span>Clique, arraste arquivos ou cole uma imagem no campo de texto.</span></div>
+            </div>
+            <input id="vx-sup-arquivos" class="vx-uploadinput" type="file" accept="image/*" multiple>
+          </label>
+          <p class="vx-support-privacy">Não envie senhas, tokens, cookies ou outras credenciais. Em denúncias, envie somente provas relevantes. Os dados serão usados para análise da equipe responsável.</p>
+          <div class="vx-support-footer">
+            <span class="vx-status" id="vx-sup-estado">Aguardando preenchimento</span>
+            <button type="button" class="vx-btn primary" id="vx-sup-enviar">Enviar suporte</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ================= SUPORTE VOXEL ================= -->
+<div class="suporte" id="suporte" role="dialog" aria-modal="true" aria-labelledby="suporte-titulo" aria-hidden="true">
+  <div class="suporte-fundo" data-fechar></div>
+
+  <div class="suporte-caixa">
+    <div class="suporte-topo">
+      <div class="marca">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <path d="M32 11 53 32 32 53 11 32Z" fill="#EDEDEF" stroke="#EDEDEF" stroke-width="9" stroke-linejoin="round"/>
+          <path d="M32 25 39 32 32 39 25 32Z" fill="#0E0F11" stroke="#0E0F11" stroke-width="6" stroke-linejoin="round"/>
+        </svg>
+        <span><b>Voxel</b><span>Suporte · Exército Brasileiro</span></span>
+      </div>
+      <button type="button" class="fechar" data-fechar>Fechar ×</button>
+    </div>
+
+    <h3 id="suporte-titulo">Descreva o problema com clareza.</h3>
+    <p class="intro">Explique o que aconteceu, quando ocorreu e qual resultado você esperava. Prints e imagens ajudam a equipe a analisar o caso com mais precisão.</p>
+
+    <div class="bot">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <path d="M32 11 53 32 32 53 11 32Z" fill="rgba(237,237,239,.75)" stroke="rgba(237,237,239,.75)" stroke-width="9" stroke-linejoin="round"/>
+        <path d="M32 25 39 32 32 39 25 32Z" fill="#0E0F11" stroke="#0E0F11" stroke-width="6" stroke-linejoin="round"/>
+      </svg>
+      <div>
+        <b>Voxel Support bot</b>
+        <p>Olá. Informe seu usuário e descreva o problema com o máximo de contexto útil. Inclua mensagens de erro, passos para reproduzir e imagens relacionadas quando tiver.</p>
+      </div>
+    </div>
+
+    <div class="campo">
+      <label for="sup-usuario">Seu nome ou usuário <em>Obrigatório</em></label>
+      <input id="sup-usuario" type="text" maxlength="60" placeholder="ex.: [CB] Nome do militar" autocomplete="off">
+    </div>
+
+    <div class="campo">
+      <label for="sup-problema">Problema <em><span id="sup-contador">0</span> / 1800</em></label>
+      <textarea id="sup-problema" maxlength="1800" placeholder="O que aconteceu, quando e o que você esperava."></textarea>
+    </div>
+
+    <div class="campo">
+      <label>Imagens <em>Até 4 imagens, 5 MB por arquivo</em></label>
+      <div class="solta" id="sup-solta" tabindex="0" role="button">Clique, arraste arquivos ou cole uma imagem no campo de texto.</div>
+      <input id="sup-arquivos" type="file" accept="image/*" multiple hidden>
+    </div>
+
+    <p class="aviso">Não envie senhas, tokens, cookies ou outras credenciais. Os dados desta solicitação serão usados somente para análise do suporte.</p>
+
+    <div class="suporte-rodape">
+      <span class="estado" id="sup-estado">Aguardando preenchimento</span>
+      <button type="button" class="btn enviar" id="sup-enviar">Enviar suporte</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script>
+(() => {
+  "use strict";
+
+  const reduzido = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const temGsap  = !!(window.gsap && window.ScrollTrigger);
+  const $  = (s, c = document) => c.querySelector(s);
+  const $$ = (s, c = document) => Array.from(c.querySelectorAll(s));
+
+  /* ---------- conteúdo gerado: hierarquia ---------- */
+  /* espelha MilitaryRankConfig.Roles · Rank, sigla e círculo (Team) */
+  const CIRCULOS = [
+    {
+      nome: "Praças", nota: "Base do efetivo",
+      postos: [
+        { r: 1, nm: "Recruta", ab: "REC", marca: "barra",  n: 0 },
+        { r: 2, nm: "Soldado", ab: "SLD", marca: "galao",  n: 1 }
+      ]
+    },
+    {
+      nome: "Graduados", nota: "Chefia de fração e instrução",
+      postos: [
+        { r: 3, nm: "Cabo",               ab: "CB",    marca: "galao",   n: 2 },
+        { r: 4, nm: "Terceiro-Sargento",  ab: "T-SGT", marca: "losango", n: 1 },
+        { r: 5, nm: "Segundo-Sargento",   ab: "S-SGT", marca: "losango", n: 2 },
+        { r: 6, nm: "Primeiro-Sargento",  ab: "P-SGT", marca: "losango", n: 3 },
+        { r: 7, nm: "Sub-Tenente",        ab: "S-BTN", marca: "losango", n: 4 }
+      ]
+    },
+    {
+      nome: "Oficiais", nota: "Comando de subdivisão",
+      postos: [
+        { r: 8,  nm: "Aspirante a Oficial", ab: "AAO",   marca: "barra",   n: 1 },
+        { r: 9,  nm: "Segundo-Tenente",     ab: "S-TN",  marca: "estrela", n: 1 },
+        { r: 10, nm: "Primeiro-Tenente",    ab: "P-TN",  marca: "estrela", n: 2 },
+        { r: 11, nm: "Capitão",             ab: "CAP",   marca: "estrela", n: 3 },
+        { r: 12, nm: "Major",               ab: "MAJ",   marca: "coroa",   n: 1 },
+        { r: 13, nm: "Tenente-Coronel",     ab: "TEN-C", marca: "coroa",   n: 2 }
+      ]
+    },
+    {
+      nome: "Superiores", nota: "Alto comando",
+      postos: [
+        { r: 14, nm: "Coronel",               ab: "COR",   marca: "coroa",   n: 3 },
+        { r: 15, nm: "General de Brigada",    ab: "GEN-B", marca: "general", n: 1 },
+        { r: 16, nm: "General de Divisão",    ab: "GEN-D", marca: "general", n: 2 },
+        { r: 17, nm: "General de Exército",   ab: "GEN-E", marca: "general", n: 3 },
+        { r: 18, nm: "Sub-Comandante",        ab: "S-COM", marca: "escudo",  n: 1 },
+        { r: 19, nm: "Comandante",            ab: "COM",   marca: "escudo",  n: 2 }
+      ]
+    }
+  ];
+
+  const estrela = (cx, cy, r) => {
+    let d = "";
+    for (let i = 0; i < 10; i++) {
+      const raio = i % 2 ? r * .42 : r;
+      const a = (Math.PI / 5) * i - Math.PI / 2;
+      d += (i ? "L" : "M") + (cx + Math.cos(a) * raio).toFixed(2) + " " + (cy + Math.sin(a) * raio).toFixed(2);
+    }
+    return d + "Z";
+  };
+
+  function insignia({ marca, n }) {
+    const cor = "#4C5C33", ouro = "#B08D2E", fundo = "#E2DDCB";
+    const linha = (qtd, y, raio, passo, preenche) => {
+      let s = "", ini = 17 - ((qtd - 1) * passo) / 2;
+      for (let i = 0; i < qtd; i++) s += `<path d="${estrela(ini + i * passo, y, raio)}" fill="${preenche}"/>`;
+      return s;
+    };
+    let corpo = "";
+
+    if (marca === "galao") {
+      for (let i = 0; i < n; i++)
+        corpo += `<path d="M6 ${25 - i * 6} 17 ${15 - i * 6} 28 ${25 - i * 6}" fill="none" stroke="${cor}" stroke-width="2.6" stroke-linecap="square"/>`;
+
+    } else if (marca === "estrela") {
+      corpo = linha(n, 17, 4.1, 8.6, ouro);
+
+    } else if (marca === "losango") {
+      const passo = n > 3 ? 7.6 : 9, ini = 17 - ((n - 1) * passo) / 2;
+      for (let i = 0; i < n; i++)
+        corpo += `<rect x="${ini + i * passo - 3.2}" y="13.8" width="6.4" height="6.4" transform="rotate(45 ${ini + i * passo} 17)" fill="${cor}"/>`;
+
+    } else if (marca === "coroa") {
+      const passo = 9, ini = 17 - ((n - 1) * passo) / 2;
+      for (let i = 0; i < n; i++)
+        corpo += `<path d="M${ini + i * passo - 4} 21 h8 l-1.4-6-2.6 2.4-2.6-2.4Z" fill="${ouro}"/>`;
+
+    } else if (marca === "general") {
+      corpo = linha(n, 14, 3.7, 8.4, ouro) + `<rect x="7.5" y="23.5" width="19" height="2.2" fill="${cor}"/>`;
+
+    } else if (marca === "escudo") {
+      const escudo = "M17 6 27 10.2v7.3c0 4.9-4.3 8.2-10 9.8-5.7-1.6-10-4.9-10-9.8v-7.3Z";
+      corpo = n > 1
+        ? `<path d="${escudo}" fill="${ouro}"/><path d="${estrela(17, 15.5, 4.4)}" fill="${fundo}"/>`
+        : `<path d="${escudo}" fill="none" stroke="${cor}" stroke-width="1.8"/><path d="${estrela(17, 15.5, 3.4)}" fill="${cor}"/>`;
+
+    } else {
+      corpo = `<rect x="6" y="16" width="22" height="2.4" fill="${cor}" opacity="${n ? ".9" : ".45"}"/>`;
+    }
+    return `<svg viewBox="0 0 34 34" aria-hidden="true"><rect x="1" y="1" width="32" height="32" fill="none" stroke="rgba(35,43,28,.18)"/>${corpo}</svg>`;
+  }
+
+  const escada = $("#escada");
+  if (escada) {
+    escada.innerHTML = CIRCULOS.map(c => `
+      <div class="circulo reveal">
+        <header><h3>${c.nome}</h3><span class="tag">${c.nota} · ${c.postos.length} postos</span></header>
+        ${c.postos.map(p => `
+          <div class="posto">
+            ${insignia(p)}
+            <span class="info"><span class="nm">${p.nm}</span><span class="ab">${p.ab}</span></span>
+            <span class="rk">${String(p.r).padStart(2, "0")}</span>
+          </div>`).join("")}
+      </div>`).join("");
+  }
+
+  /* ---------- faixa de dados ---------- */
+  const faixa = $("#faixa-in");
+  if (faixa) {
+    const itens = ["Braço forte, mão amiga", "Parceria oficial · Voxel", "Formatura diária às 20h", "5 subdivisões operacionais", "Instrução aberta a recrutas", "19 postos hierárquicos"];
+    faixa.innerHTML = (itens.map(t => `<span>${t}</span>`).join("")).repeat(4);
+  }
+
+  /* ---------- mapa topográfico do hero ---------- */
+  const mapa = $("#topo-mapa");
+  function contorno(cx, cy, r, semente, alonga) {
+    const passos = 110;
+    let d = "";
+    for (let i = 0; i <= passos; i++) {
+      const a = (i / passos) * Math.PI * 2;
+      const raio = r * (1 + .13 * Math.sin(a * 3 + semente) + .08 * Math.sin(a * 5 - semente * 1.7) + .05 * Math.sin(a * 2 + semente * .6));
+      d += (i ? "L" : "M") + (cx + Math.cos(a) * raio * alonga).toFixed(1) + " " + (cy + Math.sin(a) * raio).toFixed(1);
+    }
+    return d + "Z";
+  }
+  if (mapa) {
+    const ns = "http://www.w3.org/2000/svg";
+    const relevos = [
+      { cx: 340, cy: 520, semente: 1.2, alonga: 1.5, n: 9, base: 60, passo: 42 },
+      { cx: 1080, cy: 330, semente: 3.4, alonga: 1.3, n: 11, base: 48, passo: 40 }
+    ];
+    relevos.forEach(rel => {
+      for (let i = 0; i < rel.n; i++) {
+        const p = document.createElementNS(ns, "path");
+        p.setAttribute("d", contorno(rel.cx, rel.cy, rel.base + i * rel.passo, rel.semente + i * .35, rel.alonga));
+        if (i % 3 !== 0) p.classList.add("fraca");
+        mapa.appendChild(p);
+      }
+    });
+  }
+
+  /* ---------- fallback sem GSAP ---------- */
+  if (!temGsap || reduzido) {
+    document.documentElement.classList.add("no-anim");
+  }
+
+  /* ---------- utilidades de texto ---------- */
+  function fatiarPalavras(el) {
+    const palavras = el.textContent.trim().split(/\s+/);
+    el.innerHTML = palavras.map(p => `<span class="w"><span class="w-in">${p}</span></span>`).join(" ");
+    return $$(".w-in", el);
+  }
+
+  /* ---------- interações que não dependem de GSAP ---------- */
+  const topo = $(".topo");
+  const hero = $(".hero");
+  let ultimoY = 0;
+  const aoRolar = () => {
+    const y = window.scrollY;
+    const alturaHero = hero ? hero.offsetHeight - 74 : 0;
+    topo.classList.toggle("fixado", y > 40);
+    topo.classList.toggle("claro", y > alturaHero);
+    ultimoY = y;
+  };
+  window.addEventListener("scroll", aoRolar, { passive: true });
+  aoRolar();
+
+  // menu mobile
+  const hamb = $("#hamb"), gaveta = $("#gaveta");
+  let gavetaAberta = false;
+  const alternarGaveta = (abrir) => {
+    gavetaAberta = abrir;
+    hamb.classList.toggle("on", abrir);
+    hamb.setAttribute("aria-expanded", String(abrir));
+    gaveta.setAttribute("aria-hidden", String(!abrir));
+    document.body.classList.toggle("is-locked", abrir);
+    if (temGsap && !reduzido) {
+      gsap.to(gaveta, {
+        clipPath: abrir ? "inset(0 0 0% 0)" : "inset(0 0 100% 0)",
+        duration: .7, ease: "power4.inOut",
+        onStart: () => { if (abrir) gsap.set(gaveta, { visibility: "visible" }); },
+        onComplete: () => { if (!abrir) gsap.set(gaveta, { visibility: "hidden" }); }
+      });
+      if (abrir) gsap.fromTo($$("#gaveta a"), { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: .6, stagger: .06, delay: .18, ease: "power3.out" });
+    } else {
+      gaveta.style.clipPath = abrir ? "inset(0 0 0% 0)" : "inset(0 0 100% 0)";
+      gaveta.style.visibility = abrir ? "visible" : "hidden";
+    }
+  };
+  hamb.addEventListener("click", () => alternarGaveta(!gavetaAberta));
+  $$("#gaveta a").forEach(a => a.addEventListener("click", () => alternarGaveta(false)));
+
+  // rolagem suave interna (compensa barra da plataforma + cabeçalho)
+  const alturaFixa = () => (($(".voxel-bar") || {}).offsetHeight || 0) + (topo ? topo.offsetHeight : 0) + 8;
+  $$('a[href^="#"]').forEach(a => {
+    a.addEventListener("click", e => {
+      const alvo = $(a.getAttribute("href"));
+      if (!alvo) return;
+      e.preventDefault();
+      window.scrollTo({ top: alvo.getBoundingClientRect().top + window.scrollY - alturaFixa(), behavior: reduzido ? "auto" : "smooth" });
+    });
+  });
+
+  // acordeão
+  $$("#faq .item").forEach(item => {
+    const botao = $("button", item), resp = $(".resp", item);
+    botao.addEventListener("click", () => {
+      const abrindo = !item.classList.contains("aberto");
+      $$("#faq .item.aberto").forEach(outro => {
+        if (outro === item) return;
+        outro.classList.remove("aberto");
+        $("button", outro).setAttribute("aria-expanded", "false");
+        if (temGsap) gsap.to($(".resp", outro), { height: 0, duration: .4, ease: "power2.inOut" });
+        else $(".resp", outro).style.height = "0px";
+      });
+      item.classList.toggle("aberto", abrindo);
+      botao.setAttribute("aria-expanded", String(abrindo));
+      if (temGsap) gsap.to(resp, { height: abrindo ? "auto" : 0, duration: .5, ease: "power3.inOut" });
+      else resp.style.height = abrindo ? "auto" : "0px";
+    });
+  });
+
+  /* ---------- suporte Voxel ---------- */
+  // Production support endpoint.
+  const SUPORTE_ENDPOINT = "https://voxel-support-api-production.up.railway.app/api/support";
+
+  const suporte = $("#suporte");
+  if (suporte) {
+    const usuario = $("#sup-usuario"), problema = $("#sup-problema"), contador = $("#sup-contador");
+    const solta = $("#sup-solta"), arquivos = $("#sup-arquivos"), estado = $("#sup-estado"), enviar = $("#sup-enviar");
+    let anexos = [], focoAnterior = null;
+
+    const definirEstado = (texto, tipo) => {
+      estado.textContent = texto;
+      estado.className = "estado" + (tipo ? " " + tipo : "");
+    };
+
+    const abrirSuporte = () => {
+      focoAnterior = document.activeElement;
+      suporte.classList.add("on");
+      suporte.setAttribute("aria-hidden", "false");
+      document.body.classList.add("is-locked");
+      if (temGsap && !reduzido) {
+        gsap.fromTo(".suporte-fundo", { opacity: 0 }, { opacity: 1, duration: .3 });
+        gsap.fromTo(".suporte-caixa", { y: 26, opacity: 0 }, { y: 0, opacity: 1, duration: .5, ease: "power3.out" });
+      }
+      setTimeout(() => usuario.focus(), 120);
+    };
+
+    const fecharSuporte = () => {
+      suporte.classList.remove("on");
+      suporte.setAttribute("aria-hidden", "true");
+      document.body.classList.remove("is-locked");
+      if (focoAnterior) focoAnterior.focus();
+    };
+
+    $$("[data-suporte]").forEach(b => b.addEventListener("click", abrirSuporte));
+    $$("[data-fechar]", suporte).forEach(b => b.addEventListener("click", fecharSuporte));
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape" && suporte.classList.contains("on")) fecharSuporte();
+    });
+
+    problema.addEventListener("input", () => { contador.textContent = problema.value.length; });
+
+    const registrarAnexos = lista => {
+      anexos = Array.from(lista).filter(f => f.type.startsWith("image/") && f.size <= 5 * 1024 * 1024).slice(0, 4);
+      solta.classList.toggle("tem", anexos.length > 0);
+      solta.textContent = anexos.length
+        ? `${anexos.length} imagem(ns) anexada(s) · clique para trocar`
+        : "Clique, arraste arquivos ou cole uma imagem no campo de texto.";
+    };
+
+    solta.addEventListener("click", () => arquivos.click());
+    solta.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); arquivos.click(); } });
+    arquivos.addEventListener("change", () => registrarAnexos(arquivos.files));
+    solta.addEventListener("dragover", e => { e.preventDefault(); solta.classList.add("tem"); });
+    solta.addEventListener("dragleave", () => solta.classList.toggle("tem", anexos.length > 0));
+    solta.addEventListener("drop", e => { e.preventDefault(); registrarAnexos(e.dataTransfer.files); });
+    problema.addEventListener("paste", e => {
+      const imagens = Array.from(e.clipboardData?.items || []).filter(i => i.type.startsWith("image/")).map(i => i.getAsFile());
+      if (imagens.length) registrarAnexos([...anexos, ...imagens]);
+    });
+
+    enviar.addEventListener("click", async () => {
+      if (!usuario.value.trim()) { definirEstado("Informe seu nome ou usuário", "erro"); usuario.focus(); return; }
+      if (problema.value.trim().length < 20) { definirEstado("Descreva o problema com mais contexto", "erro"); problema.focus(); return; }
+      if (!SUPORTE_ENDPOINT) { definirEstado("Endpoint de suporte não configurado", "erro"); return; }
+
+      definirEstado("Enviando…", "");
+      try {
+        const dados = new FormData();
+        dados.append("sender", usuario.value.trim());
+        dados.append("message", problema.value.trim());
+        dados.append("website", "");
+        anexos.forEach(file => dados.append("images", file));
+
+        const r = await fetch(SUPORTE_ENDPOINT, { method: "POST", body: dados });
+        const resposta = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(resposta.error || "Falha ao enviar a solicitação.");
+
+        definirEstado(`Solicitação ${resposta.ticketId || ""} registrada`.trim(), "ok");
+        usuario.value = ""; problema.value = ""; contador.textContent = "0"; registrarAnexos([]);
+      } catch (erro) {
+        definirEstado(erro instanceof Error ? erro.message : "Falha no envio. Tente novamente.", "erro");
+      }
+    });
+  }
+
+  if (!temGsap || reduzido) return;
+
+  /* ============================================================
+     GSAP
+     ============================================================ */
+  gsap.registerPlugin(ScrollTrigger);
+
+  // estados iniciais
+  const eyebrow = $(".eyebrow"), subHero = $(".hero-baixo p");
+  const palavrasEyebrow = fatiarPalavras(eyebrow);
+  const palavrasSub = fatiarPalavras(subHero);
+  gsap.set([...palavrasEyebrow, ...palavrasSub], { yPercent: 115 });
+  gsap.set(".titulo .linha em", { yPercent: 108 });
+  gsap.set(".hero-acoes .btn", { y: 22, opacity: 0 });
+  gsap.set(".hud .canto, .hud .coord", { opacity: 0 });
+  gsap.set(".faixa", { opacity: 0 });
+
+  const linhasMapa = $$("#topo-mapa path");
+  linhasMapa.forEach(p => {
+    const c = p.getTotalLength();
+    gsap.set(p, { strokeDasharray: c, strokeDashoffset: c });
+  });
+
+  // entrada do hero
+  const tlHero = gsap.timeline({ delay: .05 });
+  tlHero
+    .to(linhasMapa, { strokeDashoffset: 0, duration: 2.4, ease: "power2.out", stagger: { each: .045, from: "random" } })
+    .to(palavrasEyebrow, { yPercent: 0, duration: .8, stagger: .045, ease: "power3.out" }, "-=2.1")
+    .to(".titulo .linha em", { yPercent: 0, duration: 1.15, stagger: .1, ease: "expo.out" }, "-=1.9")
+    .to(palavrasSub, { yPercent: 0, duration: .7, stagger: .022, ease: "power3.out" }, "-=.85")
+    .to(".hero-acoes .btn", { y: 0, opacity: 1, duration: .6, stagger: .09, ease: "power3.out" }, "-=.6")
+    .to(".hud .canto, .hud .coord", { opacity: 1, duration: .9, stagger: .06 }, "-=.7")
+    .to(".faixa", { opacity: 1, duration: .6 }, "-=.5");
+
+
+  // parallax do hero
+  gsap.to("#topo-mapa", {
+    yPercent: 16, scale: 1.06, ease: "none",
+    scrollTrigger: { trigger: ".hero", start: "top top", end: "bottom top", scrub: true }
+  });
+  gsap.to(".hero-in", {
+    yPercent: -22, opacity: .25, ease: "none",
+    scrollTrigger: { trigger: ".hero", start: "top top", end: "bottom top", scrub: true }
+  });
+
+  // faixa infinita
+  const faixaLargura = () => faixa.scrollWidth / 4;
+  gsap.to(faixa, { x: () => -faixaLargura(), duration: 26, ease: "none", repeat: -1, modifiers: { x: gsap.utils.unitize(x => parseFloat(x) % faixaLargura()) } });
+
+  // revelações padrão
+  $$(".reveal:not(.artigo)").forEach(el => {
+    gsap.to(el, {
+      opacity: 1, y: 0, duration: .9, ease: "power3.out",
+      scrollTrigger: { trigger: el, start: "top 88%", once: true }
+    });
+  });
+
+  // cabeçalhos de seção
+  $$(".secao-cab").forEach(cab => {
+    gsap.fromTo($(".fio", cab) || cab, { scaleX: 0 }, {
+      scaleX: 1, transformOrigin: "left center", duration: 1, ease: "power3.out",
+      scrollTrigger: { trigger: cab, start: "top 88%", once: true }
+    });
+  });
+
+  // contadores
+  $$("[data-count]").forEach(el => {
+    const alvo = parseFloat(el.dataset.count);
+    const obj = { v: 0 };
+    ScrollTrigger.create({
+      trigger: el, start: "top 90%", once: true,
+      onEnter: () => gsap.to(obj, {
+        v: alvo, duration: 2, ease: "power3.out",
+        onUpdate: () => { el.textContent = Math.round(obj.v).toLocaleString("pt-BR"); }
+      })
+    });
+  });
+
+  // trilho horizontal das unidades (somente desktop)
+  const mm = gsap.matchMedia();
+  mm.add("(min-width: 821px)", () => {
+    const trilho = $("#trilho");
+    const distancia = () => trilho.scrollWidth - window.innerWidth + 40;
+    const tween = gsap.to(trilho, { x: () => -distancia(), ease: "none" });
+    ScrollTrigger.create({
+      trigger: ".unidades", start: "top top", end: () => "+=" + distancia(),
+      pin: true, scrub: .8, animation: tween, invalidateOnRefresh: true, anticipatePin: 1
+    });
+  });
+
+  // linha de avanço do alistamento
+  gsap.to("#avanco", {
+    scaleX: 1, ease: "none",
+    scrollTrigger: { trigger: ".etapas", start: "top 78%", end: "bottom 65%", scrub: .6 }
+  });
+
+  // carimbo
+  const carimbo = $("#carimbo");
+  gsap.set(carimbo, { opacity: 0, scale: 2.4, rotate: -22 });
+  ScrollTrigger.create({
+    trigger: ".alistamento", start: "top 62%", once: true,
+    onEnter: () => gsap.to(carimbo, { opacity: .85, scale: 1, rotate: -9, duration: .45, ease: "back.out(2.4)" })
+  });
+
+  // painel Voxel
+  const marcaVoxel = $("#marca-voxel");
+  if (marcaVoxel) {
+    gsap.from(marcaVoxel, {
+      rotate: -135, scale: .4, opacity: 0, duration: 1.1, ease: "expo.out",
+      scrollTrigger: { trigger: ".painel-voxel", start: "top 78%", once: true }
+    });
+    gsap.from(".painel-voxel .voxel-marca span, .painel-voxel .desc, .voxel-estado div", {
+      opacity: 0, y: 18, duration: .7, stagger: .08, ease: "power3.out",
+      scrollTrigger: { trigger: ".painel-voxel", start: "top 78%", once: true }
+    });
+  }
+
+  // artigos do regulamento · o stagger é aplicado sobre o estado inicial do .reveal
+  ScrollTrigger.batch(".artigo", {
+    start: "top 86%", once: true,
+    onEnter: lote => gsap.to(lote, { opacity: 1, y: 0, x: 0, duration: .75, stagger: .07, ease: "power3.out", overwrite: "auto" })
+  });
+
+  /* ---------- botões magnéticos ---------- */
+  $$("[data-ima]").forEach(el => {
+    const forca = 0.28;
+    el.addEventListener("mousemove", e => {
+      const r = el.getBoundingClientRect();
+      gsap.to(el, { x: (e.clientX - (r.left + r.width / 2)) * forca, y: (e.clientY - (r.top + r.height / 2)) * forca, duration: .4, ease: "power3.out" });
+    });
+    el.addEventListener("mouseleave", () => gsap.to(el, { x: 0, y: 0, duration: .6, ease: "elastic.out(1,.4)" }));
+  });
+
+
+  /* ---------- Voxel full page ---------- */
+  const voxelApp = $("#voxel-app");
+  const voxelInfo = $("#voxel-info");
+  const voxelSupport = $("#voxel-support");
+  const openVoxelButtons = $$('[data-open-voxel]');
+  let focoVoxel = null;
+
+  const VOXEL_ROUTES = Object.freeze({
+    eb: null,
+    voxel: "voxel",
+    info: "voxel-info",
+    support: "voxel-support"
+  });
+
+  const getVoxelRoute = () => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("page");
+  };
+
+  const updateVoxelUrl = (route, replace = false) => {
+    const url = new URL(window.location.href);
+
+    if (route) {
+      url.searchParams.set("page", route);
+    } else {
+      url.searchParams.delete("page");
+    }
+
+    const method = replace ? "replaceState" : "pushState";
+    window.history[method]({ voxelRoute: route }, "", url);
+  };
+
+  const abrirTela = tela => {
+    if (!tela) return;
+    tela.classList.add('on');
+    tela.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('is-locked');
+    if (temGsap && !reduzido) {
+      gsap.fromTo(tela, { opacity: 0 }, { opacity: 1, duration: .22, ease: 'power2.out' });
+      const conteudo = tela.querySelectorAll('.vx-body > *, .vx-support-shell > *');
+      if (conteudo.length) gsap.fromTo(conteudo, { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: .45, stagger: .04, ease: 'power3.out' });
+    }
+  };
+
+  const fecharTela = tela => {
+    if (!tela || !tela.classList.contains('on')) return;
+    tela.classList.remove('on');
+    tela.setAttribute('aria-hidden', 'true');
+    if (![voxelApp, voxelInfo, voxelSupport].some(item => item && item.classList.contains('on'))) {
+      document.body.classList.remove('is-locked');
+      if (focoVoxel && typeof focoVoxel.focus === 'function') focoVoxel.focus();
+    }
+  };
+
+  const hideVoxelScreens = () => {
+    [voxelApp, voxelInfo, voxelSupport].forEach(tela => {
+      if (!tela) return;
+      tela.classList.remove("on");
+      tela.setAttribute("aria-hidden", "true");
+      tela.style.opacity = "";
+    });
+  };
+
+  const showVoxelRoute = route => {
+    hideVoxelScreens();
+
+    if (route === VOXEL_ROUTES.info) {
+      abrirTela(voxelApp);
+      abrirTela(voxelInfo);
+      return;
+    }
+
+    if (route === VOXEL_ROUTES.support) {
+      abrirTela(voxelApp);
+      abrirTela(voxelSupport);
+      return;
+    }
+
+    if (route === VOXEL_ROUTES.voxel) {
+      abrirTela(voxelApp);
+      return;
+    }
+
+    document.body.classList.remove("is-locked");
+  };
+
+  const navigateVoxel = (route, replace = false) => {
+    updateVoxelUrl(route, replace);
+    showVoxelRoute(route);
+  };
+
+  openVoxelButtons.forEach(btn => btn.addEventListener("click", () => {
+    focoVoxel = document.activeElement;
+    navigateVoxel(VOXEL_ROUTES.voxel);
+  }));
+
+  $("#vx-close-home")?.addEventListener("click", () => {
+    navigateVoxel(VOXEL_ROUTES.eb);
+    if (focoVoxel && typeof focoVoxel.focus === "function") focoVoxel.focus();
+  });
+
+  $("#vx-btn-info")?.addEventListener("click", () => {
+    navigateVoxel(VOXEL_ROUTES.info);
+  });
+
+  $("#vx-back-info")?.addEventListener("click", () => {
+    navigateVoxel(VOXEL_ROUTES.voxel);
+  });
+
+  $("#vx-btn-support")?.addEventListener("click", () => {
+    navigateVoxel(VOXEL_ROUTES.support);
+  });
+
+  $("#vx-back-support")?.addEventListener("click", () => {
+    navigateVoxel(VOXEL_ROUTES.voxel);
+  });
+
+  window.addEventListener("popstate", () => {
+    showVoxelRoute(getVoxelRoute());
+  });
+
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+
+    const route = getVoxelRoute();
+
+    if (route === VOXEL_ROUTES.support || route === VOXEL_ROUTES.info) {
+      navigateVoxel(VOXEL_ROUTES.voxel);
+      return;
+    }
+
+    if (route === VOXEL_ROUTES.voxel) {
+      navigateVoxel(VOXEL_ROUTES.eb);
+    }
+  });
+
+  const initialVoxelRoute = getVoxelRoute();
+  if (
+    initialVoxelRoute === VOXEL_ROUTES.voxel ||
+    initialVoxelRoute === VOXEL_ROUTES.info ||
+    initialVoxelRoute === VOXEL_ROUTES.support
+  ) {
+    showVoxelRoute(initialVoxelRoute);
+  }
+
+  /* ---------- suporte na tela do Voxel ---------- */
+  const vxTipo = $('#vx-sup-tipo');
+  const vxContexto = $('#vx-sup-contexto');
+  const vxUsuario = $('#vx-sup-usuario');
+  const vxProblema = $('#vx-sup-problema');
+  const vxContador = $('#vx-sup-contador');
+  const vxSolta = $('#vx-sup-solta');
+  const vxArquivos = $('#vx-sup-arquivos');
+  const vxEstado = $('#vx-sup-estado');
+  const vxEnviar = $('#vx-sup-enviar');
+  let vxAnexos = [];
+
+  const definirEstadoVoxel = (texto, tipo) => {
+    if (!vxEstado) return;
+    vxEstado.textContent = texto;
+    vxEstado.className = 'vx-status' + (tipo ? ' ' + tipo : '');
+  };
+
+
+  const atualizarContextoVoxel = () => {
+    if (!vxTipo || !vxContexto || !vxProblema) return;
+
+    const tipo = vxTipo.value;
+
+    if (tipo === 'Denúncia') {
+      vxContexto.textContent = 'Informe o usuário denunciado, motivo, data aproximada e provas. Prints e links de mensagens ajudam na análise.';
+      vxProblema.placeholder = 'Quem está sendo denunciado, o que aconteceu, quando ocorreu e quais provas você possui.';
+      return;
+    }
+
+    if (tipo === 'Dúvida ou outro assunto') {
+      vxContexto.textContent = 'Use esta opção quando o assunto não for uma falha técnica nem uma denúncia.';
+      vxProblema.placeholder = 'Explique sua dúvida ou assunto com o máximo de contexto necessário.';
+      return;
+    }
+
+    vxContexto.textContent = 'Erros, falhas, problemas de acesso ou comportamento inesperado.';
+    vxProblema.placeholder = 'O que aconteceu, quando ocorreu e qual resultado você esperava.';
+  };
+
+  vxTipo?.addEventListener('change', atualizarContextoVoxel);
+  atualizarContextoVoxel();
+
+  const registrarAnexosVoxel = lista => {
+    vxAnexos = Array.from(lista).filter(f => f.type.startsWith('image/') && f.size <= 5 * 1024 * 1024).slice(0, 4);
+    if (!vxSolta) return;
+    vxSolta.classList.toggle('has-files', vxAnexos.length > 0);
+    const copy = vxSolta.querySelector('.vx-uploadcopy span');
+    if (copy) {
+      copy.textContent = vxAnexos.length
+        ? `${vxAnexos.length} imagem(ns) anexada(s) · clique para trocar`
+        : 'Clique, arraste arquivos ou cole uma imagem no campo de texto.';
+    }
+  };
+
+  vxProblema?.addEventListener('input', () => { if (vxContador) vxContador.textContent = String(vxProblema.value.length); });
+  vxSolta?.addEventListener('click', () => vxArquivos?.click());
+  vxSolta?.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); vxArquivos?.click(); } });
+  vxArquivos?.addEventListener('change', () => registrarAnexosVoxel(vxArquivos.files || []));
+  vxSolta?.addEventListener('dragover', e => { e.preventDefault(); vxSolta.classList.add('drag'); });
+  vxSolta?.addEventListener('dragleave', () => vxSolta.classList.remove('drag'));
+  vxSolta?.addEventListener('drop', e => { e.preventDefault(); vxSolta.classList.remove('drag'); registrarAnexosVoxel(e.dataTransfer.files || []); });
+  vxProblema?.addEventListener('paste', e => {
+    const imagens = Array.from(e.clipboardData?.items || []).filter(i => i.type.startsWith('image/')).map(i => i.getAsFile()).filter(Boolean);
+    if (imagens.length) registrarAnexosVoxel([...vxAnexos, ...imagens]);
+  });
+
+  vxEnviar?.addEventListener('click', async () => {
+    if (!vxUsuario?.value.trim()) { definirEstadoVoxel('Informe seu nome ou usuário', 'error'); vxUsuario?.focus(); return; }
+    if ((vxProblema?.value.trim().length || 0) < 20) { definirEstadoVoxel('Descreva o problema com mais contexto', 'error'); vxProblema?.focus(); return; }
+    if (!SUPORTE_ENDPOINT) { definirEstadoVoxel('Endpoint de suporte não configurado', 'error'); return; }
+
+    definirEstadoVoxel('Enviando...', '');
+    try {
+      const dados = new FormData();
+      const categoria = vxTipo?.value || 'Suporte técnico';
+
+      dados.append('sender', vxUsuario.value.trim());
+      dados.append('message', `[${categoria}]\n${vxProblema.value.trim()}`);
+      dados.append('website', '');
+      vxAnexos.forEach(file => dados.append('images', file));
+
+      const respostaHttp = await fetch(SUPORTE_ENDPOINT, { method: 'POST', body: dados });
+      const resposta = await respostaHttp.json().catch(() => ({}));
+      if (!respostaHttp.ok) throw new Error(resposta.error || 'Falha ao enviar a solicitação.');
+
+      definirEstadoVoxel(`Solicitação ${resposta.ticketId || ''} registrada`.trim(), 'success');
+      if (vxTipo) vxTipo.value = 'Suporte técnico';
+      vxUsuario.value = '';
+      vxProblema.value = '';
+      atualizarContextoVoxel();
+      if (vxContador) vxContador.textContent = '0';
+      registrarAnexosVoxel([]);
+    } catch (erro) {
+      definirEstadoVoxel(
+        erro instanceof Error ? erro.message : 'Falha no envio. Tente novamente.',
+        'error'
+      );
+    }
+  });
+
+
+  window.addEventListener("load", () => ScrollTrigger.refresh());
+})();
+</script>
+</body>
+</html>
