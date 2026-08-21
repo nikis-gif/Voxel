@@ -1,0 +1,143 @@
+const MAX_USERNAME_LENGTH = 32;
+const MAX_DISPLAY_NAME_LENGTH = 64;
+const MAX_CHARACTER_NAME_LENGTH = 80;
+const MAX_LABEL_LENGTH = 80;
+const MAX_ROLE_ID_LENGTH = 80;
+const MAX_COMMUNITY_ID_LENGTH = 80;
+const MAX_COMMUNITIES = 32;
+const DIVISION_KEYS = new Set(["BAC", "BFEsp", "BPE", "CIGS", "CIE"]);
+
+function cleanString(value, maxLength) {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, maxLength);
+}
+
+function readMilitaryRank(value) {
+  return Number.isInteger(value) && value >= 0 && value <= 19 ? value : 0;
+}
+
+function readCommunityRank(value) {
+  return Number.isInteger(value) && value >= 0 && value <= 1000 ? value : 0;
+}
+
+function sanitizeCommunities(value) {
+  if (!Array.isArray(value)) return [];
+
+  const result = [];
+  const seen = new Set();
+
+  for (const item of value.slice(0, MAX_COMMUNITIES)) {
+    if (!item || typeof item !== "object") continue;
+
+    const id = cleanString(item.id, MAX_COMMUNITY_ID_LENGTH);
+    const name = cleanString(item.name, MAX_LABEL_LENGTH);
+    if (!id || !name || seen.has(id)) continue;
+
+    seen.add(id);
+    result.push({
+      id,
+      name,
+      roleName: cleanString(item.roleName, MAX_LABEL_LENGTH),
+      roleRank: readCommunityRank(item.roleRank),
+      memberCount: Number.isInteger(item.memberCount) && item.memberCount >= 0
+        ? Math.min(item.memberCount, 1_000_000_000)
+        : 0
+    });
+  }
+
+  return result;
+}
+
+function sanitizeProfile(body) {
+  const userId = Number(body?.userId);
+  if (!Number.isSafeInteger(userId) || userId <= 0) {
+    const error = new Error("Invalid Roblox user id");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const username = cleanString(body?.username, MAX_USERNAME_LENGTH);
+  const displayName = cleanString(body?.displayName, MAX_DISPLAY_NAME_LENGTH);
+  const characterName = cleanString(body?.characterName, MAX_CHARACTER_NAME_LENGTH);
+  if (!username) {
+    const error = new Error("Invalid Roblox username");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const militaryInput = body?.military ?? {};
+  if (militaryInput.ready !== true) {
+    const error = new Error("Os dados militares ainda estão carregando. Tente novamente em alguns segundos.");
+    error.statusCode = 409;
+    throw error;
+  }
+
+  const military = {
+    ready: true,
+    isMember: militaryInput.isMember === true,
+    rank: readMilitaryRank(militaryInput.rank),
+    label: cleanString(militaryInput.label, MAX_LABEL_LENGTH),
+    roleId: cleanString(militaryInput.roleId, MAX_ROLE_ID_LENGTH)
+  };
+
+  const divisionInput = body?.division ?? {};
+  const divisionKey = cleanString(divisionInput.key, 16);
+  const division = {
+    isMember: military.isMember && divisionInput.isMember === true && DIVISION_KEYS.has(divisionKey),
+    key: DIVISION_KEYS.has(divisionKey) ? divisionKey : "",
+    communityId: cleanString(divisionInput.communityId, MAX_COMMUNITY_ID_LENGTH),
+    rank: readMilitaryRank(divisionInput.rank),
+    label: cleanString(divisionInput.label, MAX_LABEL_LENGTH),
+    roleId: cleanString(divisionInput.roleId, MAX_ROLE_ID_LENGTH)
+  };
+
+  if (!division.isMember) {
+    division.key = "";
+    division.communityId = "";
+    division.rank = 0;
+    division.label = "";
+    division.roleId = "";
+  }
+
+  return {
+    userId,
+    username,
+    displayName,
+    characterName,
+    military,
+    division,
+    communities: sanitizeCommunities(body?.communities)
+  };
+}
+
+export function createVerificationController(codeStore, discordVerificationService) {
+  return {
+    async generateCode(req, res, next) {
+      try {
+        const profile = sanitizeProfile(req.body);
+        const generated = await codeStore.generate(profile);
+
+        res.status(201).json({
+          success: true,
+          data: generated
+        });
+      } catch (error) {
+        next(error);
+      }
+    },
+
+    async syncProfile(req, res, next) {
+      try {
+        const profile = sanitizeProfile(req.body);
+        const result = await discordVerificationService.syncRobloxProfile(profile);
+
+        res.status(200).json({
+          success: true,
+          data: result
+        });
+      } catch (error) {
+        next(error);
+      }
+    }
+  };
+}
