@@ -29,6 +29,7 @@ import { GamePresenceService } from "./services/extended/gamePresenceService.js"
 import { GuildLogService } from "./services/guildLogService.js";
 import { GuildPolicyService } from "./services/guildPolicyService.js";
 import { LinkModerationService } from "./services/linkModerationService.js";
+import { OperationalAnnouncementService } from "./services/operationalAnnouncementService.js";
 import { StaffReportService } from "./services/staffReportService.js";
 import { ModerationStore } from "./services/extended/moderationStore.js";
 
@@ -53,6 +54,7 @@ let rewardService = null;
 let recruitmentService = null;
 let discordGuildCommandService = null;
 let staffReportService = null;
+let operationalAnnouncementService = null;
 
 registerDiscordDmCommands(discordClient, env.supportOwnerId);
 const discordSupportService = new DiscordSupportService(discordClient, env.supportOwnerId);
@@ -110,6 +112,13 @@ if (env.verification.enabled) {
     client: discordClient,
     guildId: env.verification.guildId,
     verificationDatabase
+  });
+
+  operationalAnnouncementService = new OperationalAnnouncementService({
+    database: firebase.database,
+    client: discordClient,
+    guildId: env.verification.guildId,
+    staffReportService
   });
 
   discordVerificationService = new DiscordVerificationService({
@@ -191,7 +200,8 @@ const app = createApp({
   gamePresenceService,
   rewardService,
   recruitmentService,
-  staffReportService
+  staffReportService,
+  operationalAnnouncementService
 });
 const server = createServer(app);
 
