@@ -8,6 +8,7 @@ import {
 } from "discord.js";
 import { EB_VERIFICATION_CONFIG } from "../config/ebVerificationConfig.js";
 import { VOXEL_GUILD_CONFIG } from "../config/voxelGuildConfig.js";
+import { hasAdministratorAccess } from "../utils/staffAccess.js";
 
 const TICKET_COOLDOWN_MS = 20 * 60 * 1000;
 const CATEGORY_NAME = VOXEL_GUILD_CONFIG.ticketCategoryName;
@@ -46,7 +47,12 @@ export class TicketService {
       if (!this.client.isReady()) return;
       const guilds = [...this.client.guilds.cache.values()];
       for (const guild of guilds) {
-        await this.ensureCategory(guild).catch((error) => console.error("[tickets] Failed to ensure ticket category:", error));
+        try {
+          const category = await this.ensureCategory(guild);
+          await this.syncStaffAccess(guild, category);
+        } catch (error) {
+          console.error("[tickets] Failed to sync ticket access:", error);
+        }
       }
     };
 
@@ -55,14 +61,41 @@ export class TicketService {
   }
 
   staffRoleIds() {
-    return ["oficiais", "superiores", "comandantes"]
-      .map((key) => this.roleIds[key])
-      .filter((id) => typeof id === "string" && /^\d{17,20}$/.test(id));
+    return [...new Set([
+      ...["oficiais", "superiores", "comandantes"].map((key) => this.roleIds[key]),
+      ...VOXEL_GUILD_CONFIG.privilegedRoleIds
+    ])].filter((id) => typeof id === "string" && /^\d{17,20}$/.test(id));
   }
 
   isStaff(member) {
-    if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
+    if (hasAdministratorAccess(member)) return true;
     return this.staffRoleIds().some((roleId) => member.roles.cache.has(roleId));
+  }
+
+  async syncStaffAccess(guild, category) {
+    const staffIds = this.staffRoleIds();
+    if (!staffIds.length) return;
+
+    const ticketChannels = guild.channels.cache.filter((channel) =>
+      channel.parentId === category.id
+      && channel.type === ChannelType.GuildText
+      && channel.topic?.startsWith("Voxel ticket | Owner ")
+    );
+
+    const permissions = {
+      ViewChannel: true,
+      SendMessages: true,
+      ReadMessageHistory: true,
+      AttachFiles: true,
+      EmbedLinks: true,
+      ManageMessages: true
+    };
+
+    for (const channel of ticketChannels.values()) {
+      for (const roleId of staffIds) {
+        await channel.permissionOverwrites.edit(roleId, permissions, { reason: "Voxel ticket staff access sync" });
+      }
+    }
   }
 
   async ensureCategory(guild) {
@@ -171,7 +204,7 @@ export class TicketService {
       )
       .addFields(
         { name: "Solicitante", value: `<@${member.id}>`, inline: true },
-        { name: "Equipe com acesso", value: "Oficiais, Superiores e Comandantes", inline: true }
+        { name: "Equipe com acesso", value: "Equipe autorizada do Voxel", inline: true }
       )
       .setFooter({ text: "Voxel • Sistema de tickets" })
       .setTimestamp();
