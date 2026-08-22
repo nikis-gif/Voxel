@@ -5,6 +5,7 @@ import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { createGameAccessRouter } from "./routes/gameAccessRoutes.js";
 import { createGameBridgeRouter } from "./routes/gameBridgeRoutes.js";
 import { createHealthRouter } from "./routes/healthRoutes.js";
+import { createOperationalAnnouncementRouter } from "./routes/operationalAnnouncementRoutes.js";
 import { createRewardRouter } from "./routes/rewardRoutes.js";
 import { createStaffReportRouter } from "./routes/staffReportRoutes.js";
 import { createRecruitmentRouter } from "./routes/recruitmentRoutes.js";
@@ -24,7 +25,8 @@ export function createApp({
   gamePresenceService,
   rewardService,
   recruitmentService,
-  staffReportService
+  staffReportService,
+  operationalAnnouncementService
 }) {
   const app = express();
   const allowedOrigins = new Set(env.allowedOrigins);
@@ -85,6 +87,10 @@ export function createApp({
 
     if (staffReportService) {
       app.use("/api/staff-reports", createStaffReportRouter({ staffReportService }));
+    }
+
+    if (operationalAnnouncementService) {
+      app.use("/api/operational-announcements", createOperationalAnnouncementRouter({ operationalAnnouncementService }));
     }
   }
 
