@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
-import { AttachmentBuilder, EmbedBuilder, PermissionFlagsBits } from "discord.js";
+import { AttachmentBuilder, EmbedBuilder } from "discord.js";
 import { EB_VERIFICATION_CONFIG } from "../config/ebVerificationConfig.js";
 import { VOXEL_GUILD_CONFIG } from "../config/voxelGuildConfig.js";
+import { hasAdministratorAccess } from "../utils/staffAccess.js";
 import { safeAttachmentName } from "../utils/text.js";
 
 const ROOT_PATH = "voxel/v1/staffReports";
@@ -52,7 +53,7 @@ export class StaffReportService {
 
     const guild = await this.client.guilds.fetch(this.guildId).catch(() => null);
     const member = guild ? await guild.members.fetch(String(link.discordUserId)).catch(() => null) : null;
-    return Boolean(member?.permissions.has(PermissionFlagsBits.Administrator));
+    return hasAdministratorAccess(member);
   }
 
   async authorize(code) {
