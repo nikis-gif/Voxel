@@ -34,6 +34,7 @@ import { unlockChatCommand, UNLOCK_CHAT_COMMAND_NAME } from "../commands/securit
 import { TICKET_CLOSE_PREFIX } from "./ticketService.js";
 import { EB_VERIFICATION_CONFIG } from "../config/ebVerificationConfig.js";
 import { VOXEL_OWNER_IDS } from "../config/voxelSecurityConfig.js";
+import { interactionHasAdministratorAccess } from "../utils/staffAccess.js";
 
 const ERROR_COLOR = 0xed4245;
 const SUPPORT_URL = "https://nikis-gif.github.io/Voxel/";
@@ -103,7 +104,7 @@ function errorEmbed(client, title, description) {
 }
 
 function assertAdministrator(interaction) {
-  if (interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return;
+  if (interactionHasAdministratorAccess(interaction)) return;
 
   const error = new Error("Este comando é restrito aos administradores do servidor.");
   error.code = "ADMIN_REQUIRED";
@@ -252,7 +253,14 @@ export class DiscordGuildCommandService {
     const guild = await this.client.guilds.fetch(this.guildId);
     const extensions = this.extensionServices.flatMap((service) => service.getCommandBuilders?.() ?? []);
     const builders = [...COMMAND_BUILDERS, ...extensions];
-    await guild.commands.set(builders.map((builder) => builder.toJSON()));
+    const payloads = builders.map((builder) => {
+      const data = builder.toJSON();
+      if (data.default_member_permissions === PermissionFlagsBits.Administrator.toString()) {
+        data.default_member_permissions = null;
+      }
+      return data;
+    });
+    await guild.commands.set(payloads);
 
     this.commandsRegistered = true;
     console.log(`[commands] Registered ${builders.length} Voxel command(s) in ${guild.name}.`);
@@ -476,7 +484,7 @@ export class DiscordGuildCommandService {
 
 
   assertStaff(interaction) {
-    if (interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return;
+    if (interactionHasAdministratorAccess(interaction)) return;
     const allowed = ["oficiais", "superiores", "comandantes"]
       .map((key) => this.roleIds[key])
       .filter(Boolean);
@@ -489,7 +497,7 @@ export class DiscordGuildCommandService {
   }
 
   assertSeniorStaff(interaction) {
-    if (interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return;
+    if (interactionHasAdministratorAccess(interaction)) return;
     const allowed = ["superiores", "comandantes"]
       .map((key) => this.roleIds[key])
       .filter(Boolean);
