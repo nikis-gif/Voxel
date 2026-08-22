@@ -13,6 +13,11 @@ export const VOXEL_GUILD_CONFIG = Object.freeze({
     "1540408286531158026"
   ]),
 
+  privilegedRoleIds: Object.freeze([
+    "1540720238381760672",
+    "1540720232359006298"
+  ]),
+
   linkAllowedRoleKeys: Object.freeze([
     "oficiais",
     "superiores",
