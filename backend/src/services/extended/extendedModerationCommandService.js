@@ -6,7 +6,9 @@ import {
 } from "discord.js";
 import { extendedModerationCommands } from "../../commands/extended/moderationCommands.js";
 import { EB_VERIFICATION_CONFIG } from "../../config/ebVerificationConfig.js";
+import { VOXEL_GUILD_CONFIG } from "../../config/voxelGuildConfig.js";
 import { VOXEL_OWNER_IDS } from "../../config/voxelSecurityConfig.js";
+import { hasAdministratorAccess, interactionHasAdministratorAccess } from "../../utils/staffAccess.js";
 
 const COMMAND_NAMES = new Set(extendedModerationCommands.map((builder) => builder.name));
 const ERROR_COLOR = 0xed4245;
@@ -90,7 +92,7 @@ export class ExtendedModerationCommandService {
   }
 
   roleAllowed(member, keys) {
-    if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
+    if (hasAdministratorAccess(member)) return true;
     return keys.map((key) => this.roleIds[key]).filter(Boolean).some((id) => member.roles.cache.has(id));
   }
 
@@ -115,7 +117,7 @@ export class ExtendedModerationCommandService {
   }
 
   assertAdmin(interaction) {
-    if (interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return;
+    if (interactionHasAdministratorAccess(interaction)) return;
     const error = new Error("Este comando é restrito aos administradores do servidor.");
     error.code = "ADMIN_REQUIRED";
     throw error;
@@ -576,7 +578,10 @@ export class ExtendedModerationCommandService {
     const overwrites = [
       { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
       { id: this.client.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-      ...["oficiais", "superiores", "comandantes"].map((key) => this.roleIds[key]).filter(Boolean).map((id) => ({ id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }))
+      ...[
+        ...["oficiais", "superiores", "comandantes"].map((key) => this.roleIds[key]),
+        ...VOXEL_GUILD_CONFIG.privilegedRoleIds
+      ].filter(Boolean).map((id) => ({ id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }))
     ];
     return guild.channels.create({ name: "voxel-reports", type: ChannelType.GuildText, permissionOverwrites: overwrites, reason: "Voxel report system" });
   }
