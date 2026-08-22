@@ -10,6 +10,7 @@ import {
 } from "discord.js";
 import { communityExperienceCommands } from "../../commands/extended/communityCommands.js";
 import { EB_VERIFICATION_CONFIG } from "../../config/ebVerificationConfig.js";
+import { hasAdministratorAccess } from "../../utils/staffAccess.js";
 
 const COMMAND_NAMES = new Set(communityExperienceCommands.map((builder) => builder.name));
 const SHOP_PREFIX = "voxel-shop";
@@ -181,7 +182,7 @@ export class CommunityExperienceCommandService {
 
   async assertStaff(interaction) {
     const member = await interaction.guild.members.fetch(interaction.user.id);
-    if (member.permissions.has(PermissionFlagsBits.Administrator)) return member;
+    if (hasAdministratorAccess(member)) return member;
     const allowed = ["oficiais", "superiores", "comandantes"].map((key) => this.roleIds[key]).filter(Boolean);
     if (allowed.some((id) => member.roles.cache.has(id))) return member;
     throw new Error("Esta ação exige Oficiais, Superiores, Comandantes ou Administradores.");
