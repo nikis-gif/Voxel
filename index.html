@@ -1319,7 +1319,16 @@ p{margin:0}
 .staff-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px;padding-top:16px;border-top:1px solid #292b30}
 .staff-note{color:#777c86;font-size:10.8px;line-height:1.5}
 .staff-hidden{display:none!important}
-@media(max-width:620px){.staff-shell{padding-inline:14px}.staff-auth-grid{grid-template-columns:1fr}.staff-auth-grid .vx-btn{width:100%}.staff-body{padding:14px}.staff-profile{align-items:flex-start;flex-direction:column}.staff-tabs{grid-template-columns:1fr}.staff-actions{align-items:stretch;flex-direction:column}.staff-actions .vx-btn{width:100%}}
+.staff-mode-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px;padding:5px;border:1px solid #292c32;border-radius:12px;background:#111216}
+.staff-mode-tab{height:38px;border:0;border-radius:8px;background:transparent;color:#858a94;font:600 11.5px Inter,system-ui,sans-serif;cursor:pointer}
+.staff-mode-tab.active{background:#22252c;color:#f3f4f6;box-shadow:inset 0 0 0 1px #343842}
+.staff-select{width:100%;height:44px;padding:0 12px;border:1px solid #353840;border-radius:10px;background:#111216;color:#f4f5f7;font:14px Inter,system-ui,sans-serif;outline:none}
+.staff-select:focus{border-color:#4775ff;box-shadow:0 0 0 3px rgba(71,117,255,.12)}
+.staff-ranks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:10px;border:1px solid #30333a;border-radius:12px;background:#111216}
+.staff-rank{display:flex;align-items:center;gap:8px;min-height:36px;padding:7px 9px;border:1px solid #2c2f35;border-radius:8px;background:#15161a;color:#b9bdc6;font-size:11px;cursor:pointer}
+.staff-rank input{accent-color:#4775ff}.staff-rank:has(input:checked){border-color:#4668c9;background:#19213a;color:#d6dfff}
+.staff-inline-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:620px){.staff-ranks,.staff-inline-grid{grid-template-columns:1fr}.staff-shell{padding-inline:14px}.staff-auth-grid{grid-template-columns:1fr}.staff-auth-grid .vx-btn{width:100%}.staff-body{padding:14px}.staff-profile{align-items:flex-start;flex-direction:column}.staff-tabs{grid-template-columns:1fr}.staff-actions{align-items:stretch;flex-direction:column}.staff-actions .vx-btn{width:100%}}
 
 @media (prefers-reduced-motion:reduce){
   *{animation:none!important;transition:none!important}
@@ -1367,11 +1376,8 @@ p{margin:0}
 
     <nav class="menu">
       <a href="#doutrina">Doutrina</a>
-      <a href="#unidades">Subdivisões</a>
-      <a href="#hierarquia">Hierarquia</a>
-      <a href="#parceria">Parceria</a>
-      <a href="#alistamento">Alistamento</a>
-      <a class="btn" href="#alistamento" data-ima>Alistar-se</a>
+      <a href="#parceria">Voxel</a>
+      <button class="btn" type="button" data-ima data-start-recruitment>Alistar-se</button>
     </nav>
 
     <button class="hamb" id="hamb" aria-label="Abrir menu" aria-expanded="false"><i></i><i></i></button>
@@ -1380,12 +1386,7 @@ p{margin:0}
 
 <nav class="gaveta" id="gaveta" aria-hidden="true">
   <a href="#doutrina"><small>01</small>Doutrina</a>
-  <a href="#unidades"><small>02</small>Subdivisões</a>
-  <a href="#hierarquia"><small>03</small>Hierarquia</a>
-  <a href="#parceria"><small>04</small>Parceria</a>
-  <a href="#alistamento"><small>05</small>Alistamento</a>
-  <a href="#disciplina"><small>06</small>Disciplina</a>
-  <a href="#duvidas"><small>07</small>Dúvidas</a>
+  <a href="#parceria"><small>02</small>Voxel</a>
 </nav>
 
 <main>
@@ -1411,7 +1412,7 @@ p{margin:0}
       <p data-split="words">Instrução de recrutas, batalhões com missão definida e operações toda semana. Aqui a patente é conquistada em formatura, não distribuída no chat.</p>
       <div class="hero-acoes">
         <button class="btn solido" type="button" data-ima data-start-recruitment>Iniciar alistamento</button>
-        <a class="btn" href="#hierarquia" data-ima>Ver hierarquia</a>
+        <button class="btn" type="button" data-ima data-open-voxel>Conhecer Voxel</button>
       </div>
     </div>
   </div>
@@ -1454,75 +1455,11 @@ p{margin:0}
   </div>
 </section>
 
-<!-- ================= 02 UNITS ================= -->
-<section class="secao unidades" id="unidades">
-  <div class="wrap">
-    <div class="secao-cab">
-      <span class="num">SEÇÃO 02</span><span class="nome">Organização</span><span class="fio"></span><span class="nome">Quadro de efetivo</span>
-    </div>
-    <h2 class="reveal">Cinco subdivisões, cada uma com missão e instrução próprias</h2>
-  </div>
-
-  <div class="trilho" id="trilho">
-    <article class="ficha">
-      <div class="sigla"><span>BAC |EB|</span><span>01</span></div>
-      <h3>Batalhão de Ações de Comandos</h3>
-      <p class="lema">Ação direta</p>
-      <p>Conduz assalto a posições fortificadas, tomada de estruturas e operações de choque em apoio ao restante do efetivo.</p>
-      <ul><li>Assalto</li><li>Ação direta</li><li>Entrada por aprovação</li></ul>
-    </article>
-
-    <article class="ficha">
-      <div class="sigla"><span>BFE |EB|</span><span>02</span></div>
-      <h3>Batalhão de Forças Especiais</h3>
-      <p class="lema">Seleção permanente</p>
-      <p>Unidade de acesso restrito. Reconhecimento profundo, resgate e missões de baixa visibilidade. Ingresso somente por seleção interna.</p>
-      <ul><li>Infiltração</li><li>Resgate</li><li>Seleção interna</li></ul>
-    </article>
-
-    <article class="ficha">
-      <div class="sigla"><span>BPE |EB|</span><span>03</span></div>
-      <h3>Batalhão de Polícia do Exército</h3>
-      <p class="lema">Ordem na tropa</p>
-      <p>Fiscaliza uniforme, conduta e regulamento em formaturas e no quartel. Conduz sindicâncias e aplica sanções disciplinares.</p>
-      <ul><li>Disciplina</li><li>Guarda</li><li>Sindicância</li></ul>
-    </article>
-
-    <article class="ficha">
-      <div class="sigla"><span>CIGS |EB|</span><span>04</span></div>
-      <h3>Centro de Instrução de Guerra na Selva</h3>
-      <p class="lema">Selva, Guerreiro</p>
-      <p>Porta de entrada obrigatória. Ministra o treinamento básico, avalia o recruta e o encaminha à subdivisão compatível com seu desempenho.</p>
-      <ul><li>Treinamento</li><li>Avaliação</li><li>Turmas diárias</li></ul>
-    </article>
-
-    <article class="ficha">
-      <div class="sigla"><span>CIE |EB|</span><span>05</span></div>
-      <h3>Centro de Inteligência do Exército</h3>
-      <p class="lema">Informação antes da ordem</p>
-      <p>Levanta dados de setor, monitora atividade externa e prepara o briefing que antecede cada operação do efetivo.</p>
-      <ul><li>Reconhecimento</li><li>Briefing</li><li>Contrainteligência</li></ul>
-    </article>
-  </div>
-
-  <div class="wrap"><p class="arraste tag" aria-hidden="true">↔ Role para percorrer o quadro</p></div>
-</section>
-
-<!-- ================= 03 HIERARCHY ================= -->
-<section class="secao" id="hierarquia">
-  <div class="wrap">
-    <div class="secao-cab">
-      <span class="num">SEÇÃO 03</span><span class="nome">Hierarquia</span><span class="fio"></span><span class="nome">Círculos e postos</span>
-    </div>
-    <div class="escada" id="escada"></div>
-  </div>
-</section>
-
-<!-- ================= 04 PARTNERSHIP ================= -->
+<!-- ================= 02 VOXEL ================= -->
 <section class="secao parceria" id="parceria">
   <div class="wrap">
     <div class="secao-cab">
-      <span class="num">SEÇÃO 04</span><span class="nome">Parceria oficial</span><span class="fio"></span><span class="nome">Voxel · 2026</span>
+      <span class="num">SEÇÃO 02</span><span class="nome">Voxel</span><span class="fio"></span><span class="nome">Voxel · 2026</span>
     </div>
 
     <div class="parceria-grid">
@@ -1565,58 +1502,6 @@ p{margin:0}
   </div>
 </section>
 
-<!-- ================= 05 ENLISTMENT ================= -->
-<section class="secao alistamento" id="alistamento">
-  <div class="carimbo" id="carimbo">Documento de<b>Uso Interno</b>CG-EB</div>
-  <div class="wrap">
-    <div class="secao-cab">
-      <span class="num">SEÇÃO 05</span><span class="nome">Alistamento</span><span class="fio"></span><span class="nome">Aberto</span>
-    </div>
-
-    <div class="etapas">
-      <span class="avanco" id="avanco"></span>
-      <div class="etapa reveal"><div class="n">01</div><h4>Solicite entrada</h4><p>Peça acesso à comunidade Exército Brasileiro |EB| pelo Voxel. A entrada é liberada por aprovação.</p><span class="prazo tag">Aprovação manual</span></div>
-      <div class="etapa reveal"><div class="n">02</div><h4>Leia o regulamento</h4><p>No Discord, confirme a leitura do regulamento disciplinar e receba o cargo de Recruta.</p><span class="prazo tag">5 minutos</span></div>
-      <div class="etapa reveal"><div class="n">03</div><h4>Apresente-se ao CIGS</h4><p>Compareça a uma turma do Centro de Instrução de Guerra na Selva com uniforme padrão e microfone opcional.</p><span class="prazo tag">Turmas diárias</span></div>
-      <div class="etapa reveal"><div class="n">04</div><h4>Conclua a instrução</h4><p>Aprovado no exame prático, você é graduado Soldado e designado a uma subdivisão.</p><span class="prazo tag">Até 3 dias</span></div>
-    </div>
-  </div>
-</section>
-
-<!-- ================= 06 DISCIPLINE ================= -->
-<section class="secao" id="disciplina">
-  <div class="wrap">
-    <div class="secao-cab">
-      <span class="num">SEÇÃO 06</span><span class="nome">Disciplina</span><span class="fio"></span><span class="nome">Regulamento interno</span>
-    </div>
-
-    <div class="artigos">
-      <div class="artigo reveal"><span class="id">Art. 1º</span><div><h4>Respeito à cadeia de comando</h4><p>Ordens são cumpridas de imediato. Discordância é registrada após a execução, junto ao comandante da subdivisão ou ao BPE.</p></div></div>
-      <div class="artigo reveal"><span class="id">Art. 2º</span><div><h4>Uniforme padronizado</h4><p>É obrigatório o uso do uniforme da subdivisão em formaturas e operações. Acessórios não previstos no manual são vedados.</p></div></div>
-      <div class="artigo reveal"><span class="id">Art. 3º</span><div><h4>Proibição de exploits</h4><p>Qualquer manipulação do jogo resulta em exclusão permanente da comunidade e comunicação à moderação do Roblox.</p></div></div>
-      <div class="artigo reveal"><span class="id">Art. 4º</span><div><h4>Comunicação por rádio</h4><p>Canais operacionais são restritos a mensagens de serviço, com identificação de indicativo e subdivisão.</p></div></div>
-      <div class="artigo reveal"><span class="id">Art. 5º</span><div><h4>Conduta entre militares</h4><p>Ofensa, discriminação ou assédio contra qualquer integrante é falta grave, sem direito a reincidência.</p></div></div>
-      <div class="artigo reveal"><span class="id">Art. 6º</span><div><h4>Assiduidade</h4><p>Ausência superior a 21 dias sem justificativa transfere o militar à reserva, com perda do posto na retomada.</p></div></div>
-    </div>
-  </div>
-</section>
-
-<!-- ================= 07 FAQ ================= -->
-<section class="secao" id="duvidas">
-  <div class="wrap">
-    <div class="secao-cab">
-      <span class="num">SEÇÃO 07</span><span class="nome">Dúvidas frequentes</span><span class="fio"></span>
-    </div>
-
-    <div class="faq" id="faq">
-      <div class="item"><button aria-expanded="false"><span>Preciso ter microfone para entrar?</span><i class="mais"></i></button><div class="resp"><p>Não. O microfone é exigido apenas para funções de comando e para o curso de observador avançado. Recrutas e soldados operam normalmente por texto.</p></div></div>
-      <div class="item"><button aria-expanded="false"><span>Existe idade mínima?</span><i class="mais"></i></button><div class="resp"><p>Não exigimos idade mínima, mas a conduta cobrada é a mesma para todos. Quem não sustenta o regulamento é desligado, independentemente do tempo de casa.</p></div></div>
-      <div class="item"><button aria-expanded="false"><span>Quanto tempo leva para ser promovido?</span><i class="mais"></i></button><div class="resp"><p>Depende de presença e de cursos concluídos. Em média, um soldado assíduo alcança Cabo em duas semanas e 3º Sargento em cerca de dois meses.</p></div></div>
-      <div class="item"><button aria-expanded="false"><span>Posso escolher minha subdivisão?</span><i class="mais"></i></button><div class="resp"><p>Você indica a preferência no fim da instrução. A designação final considera desempenho no exame prático e vagas abertas na subdivisão.</p></div></div>
-      <div class="item"><button aria-expanded="false"><span>Como entro no Batalhão de Forças Especiais?</span><i class="mais"></i></button><div class="resp"><p>Somente por seleção interna, aberta a partir da graduação de Cabo, com no mínimo 30 dias de efetivo serviço e nenhuma sanção disciplinar registrada.</p></div></div>
-    </div>
-  </div>
-</section>
 </main>
 
 <!-- ================= FOOTER ================= -->
@@ -1625,10 +1510,9 @@ p{margin:0}
     <div class="rodape-grid">
       <div class="sobre">
         <h5>Comando Geral</h5>
-        <p>Comunidade de simulação militar no Roblox, com efetivo organizado em cinco subdivisões, hierarquia de 19 postos e instrução contínua de recrutas.</p>
+        <p>Comunidade de simulação militar no Roblox com doutrina, hierarquia e operações integradas ao ecossistema Voxel.</p>
       </div>
-      <div><h5>Institucional</h5><ul><li><a href="#doutrina">Doutrina</a></li><li><a href="#unidades">Subdivisões</a></li><li><a href="#hierarquia">Hierarquia</a></li></ul></div>
-      <div><h5>Efetivo</h5><ul><li><a href="#alistamento">Alistamento</a></li><li><a href="#disciplina">Regulamento</a></li><li><a href="#duvidas">Dúvidas</a></li></ul></div>
+      <div><h5>Institucional</h5><ul><li><a href="#doutrina">Doutrina</a></li><li><a href="#parceria">Voxel</a></li></ul></div>
       <div><h5>Canais</h5><ul><li><a href="https://discord.gg/hMkkqXPUk" target="_blank" rel="noopener">Servidor no Discord</a></li><li><button class="link-suporte" type="button" data-open-voxel>Comunidade no Voxel</button></li><li><button class="link-suporte" data-suporte>Suporte Voxel</button></li></ul></div>
     </div>
 
@@ -1841,21 +1725,15 @@ p{margin:0}
     <div class="staff-shell">
       <div class="staff-head">
         <span class="vx-mini">Área restrita</span>
-        <h1>Relatórios operacionais</h1>
-        <p>Área disponível para Graduados, Oficiais, Superiores, Comandantes e Administradores. Use um código temporário do Voxel para validar sua conta antes de enviar registros.</p>
+        <h1>Operações e relatórios</h1>
+        <p>Área disponível para Graduados, Oficiais, Superiores, Comandantes e Administradores. O mesmo código temporário do Voxel libera relatórios concluídos e avisos de treinamentos ou exames.</p>
       </div>
 
       <section class="staff-panel" id="staff-auth-view">
-        <div class="staff-panel-head">
-          <h2>Identificação</h2>
-          <p>O código é de uso único e serve apenas para liberar esta sessão de relatórios.</p>
-        </div>
+        <div class="staff-panel-head"><h2>Identificação</h2><p>O código é de uso único e libera uma sessão operacional temporária.</p></div>
         <div class="staff-body">
           <div class="staff-auth-grid">
-            <label class="staff-field" style="margin:0">
-              <span class="staff-label">Código temporário do Voxel <small>XXXX-XXXX</small></span>
-              <input class="staff-input" id="staff-code" maxlength="9" autocomplete="off" placeholder="XXXX-XXXX">
-            </label>
+            <label class="staff-field" style="margin:0"><span class="staff-label">Código temporário do Voxel <small>XXXX-XXXX</small></span><input class="staff-input" id="staff-code" maxlength="9" autocomplete="off" placeholder="XXXX-XXXX"></label>
             <button type="button" class="vx-btn primary" id="staff-auth">Entrar</button>
           </div>
           <div class="staff-status" id="staff-auth-status"></div>
@@ -1863,53 +1741,49 @@ p{margin:0}
       </section>
 
       <section class="staff-panel staff-hidden" id="staff-form-view">
-        <div class="staff-panel-head">
-          <h2>Novo relatório</h2>
-          <p>As informações serão enviadas pelo Voxel diretamente ao canal correspondente no Discord.</p>
-        </div>
+        <div class="staff-panel-head"><h2>Central operacional</h2><p>Escolha entre registrar uma atividade concluída ou publicar uma atividade que ainda vai acontecer.</p></div>
         <div class="staff-body">
-          <div class="staff-profile">
-            <div><strong id="staff-profile-name">Militar</strong><span id="staff-profile-meta">Sessão autorizada</span></div>
-            <button type="button" class="vx-btn secondary" id="staff-logout">Sair</button>
+          <div class="staff-profile"><div><strong id="staff-profile-name">Militar</strong><span id="staff-profile-meta">Sessão autorizada</span></div><button type="button" class="vx-btn secondary" id="staff-logout">Sair</button></div>
+
+          <div class="staff-mode-tabs">
+            <button type="button" class="staff-mode-tab active" data-staff-mode="reports">Relatórios concluídos</button>
+            <button type="button" class="staff-mode-tab" data-staff-mode="announcements">Avisos de atividade</button>
           </div>
 
-          <div class="staff-tabs">
-            <button type="button" class="staff-tab active" data-report-type="recruitment">Relatório de Recrutamento</button>
-            <button type="button" class="staff-tab" data-report-type="training">Treinamento de Patente</button>
-          </div>
-
-          <label class="staff-field">
-            <span class="staff-label">Instrutor <small>Confirmado pelo Voxel</small></span>
-            <input class="staff-input" id="staff-instructor" readonly>
-          </label>
-          <label class="staff-field">
-            <span class="staff-label">Auxiliares <small>Obrigatório</small></span>
-            <textarea class="staff-textarea" id="staff-assistants" maxlength="1000" placeholder="Informe os auxiliares do recrutamento ou treinamento."></textarea>
-          </label>
-          <label class="staff-field" id="staff-recruits-field">
-            <span class="staff-label">Novos Recrutas <small>Obrigatório</small></span>
-            <textarea class="staff-textarea" id="staff-recruits" maxlength="1000" placeholder="Liste os novos recrutas aprovados."></textarea>
-          </label>
-          <label class="staff-field staff-hidden" id="staff-promoted-field">
-            <span class="staff-label">Promovidos <small>Obrigatório</small></span>
-            <textarea class="staff-textarea" id="staff-promoted" maxlength="1000" placeholder="Liste os militares promovidos e, se necessário, seus novos postos."></textarea>
-          </label>
-          <label class="staff-field">
-            <span class="staff-label">Estimativa de tempo <small>Obrigatório</small></span>
-            <input class="staff-input" id="staff-duration" maxlength="120" placeholder="ex.: 35 minutos">
-          </label>
-          <label class="staff-field">
-            <span class="staff-label">Comprovações <small>Até 4 imagens, 5 MB cada</small></span>
-            <div class="staff-proof" id="staff-proof" tabindex="0" role="button">
-              <div class="staff-proof-icon">↑</div>
-              <div><b>Adicionar comprovações</b><span id="staff-proof-copy">Clique ou arraste imagens para anexar.</span></div>
+          <div id="staff-reports-mode">
+            <div class="staff-tabs">
+              <button type="button" class="staff-tab active" data-report-type="recruitment">Relatório de Recrutamento</button>
+              <button type="button" class="staff-tab" data-report-type="training">Treinamento de Patente</button>
             </div>
-            <input id="staff-files" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
-          </label>
+            <label class="staff-field"><span class="staff-label">Instrutor <small>Confirmado pelo Voxel</small></span><input class="staff-input staff-presenter" id="staff-instructor" readonly></label>
+            <label class="staff-field"><span class="staff-label">Auxiliares <small>Obrigatório</small></span><textarea class="staff-textarea" id="staff-assistants" maxlength="1000" placeholder="Informe os auxiliares do recrutamento ou treinamento."></textarea></label>
+            <label class="staff-field" id="staff-recruits-field"><span class="staff-label">Novos Recrutas <small>Obrigatório</small></span><textarea class="staff-textarea" id="staff-recruits" maxlength="1000" placeholder="Liste os novos recrutas aprovados."></textarea></label>
+            <label class="staff-field staff-hidden" id="staff-promoted-field"><span class="staff-label">Promovidos <small>Obrigatório</small></span><textarea class="staff-textarea" id="staff-promoted" maxlength="1000" placeholder="Liste os militares promovidos e seus novos postos."></textarea></label>
+            <label class="staff-field"><span class="staff-label">Estimativa de tempo <small>Obrigatório</small></span><input class="staff-input" id="staff-duration" maxlength="120" placeholder="ex.: 35 minutos"></label>
+            <label class="staff-field"><span class="staff-label">Comprovações <small>Até 4 imagens, 5 MB cada</small></span><div class="staff-proof" id="staff-proof" tabindex="0" role="button"><div class="staff-proof-icon">↑</div><div><b>Adicionar comprovações</b><span id="staff-proof-copy">Clique ou arraste imagens para anexar.</span></div></div><input id="staff-files" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden></label>
+            <div class="staff-actions"><div><div class="staff-status" id="staff-submit-status"></div><div class="staff-note">O Voxel registra o remetente e a data automaticamente.</div></div><button type="button" class="vx-btn primary" id="staff-submit">Enviar relatório</button></div>
+          </div>
 
-          <div class="staff-actions">
-            <div><div class="staff-status" id="staff-submit-status"></div><div class="staff-note">O Voxel registra o remetente e a data automaticamente.</div></div>
-            <button type="button" class="vx-btn primary" id="staff-submit">Enviar relatório</button>
+          <div class="staff-hidden" id="staff-announcements-mode">
+            <div class="staff-tabs">
+              <button type="button" class="staff-tab active" data-announcement-type="training">Treinamento de Patente</button>
+              <button type="button" class="staff-tab" data-announcement-type="exam">Exame</button>
+            </div>
+            <label class="staff-field"><span class="staff-label" id="announcement-presenter-label">Instrutor <small>Confirmado pelo Voxel</small></span><input class="staff-input staff-presenter" id="announcement-presenter" readonly></label>
+
+            <div id="announcement-training-location">
+              <label class="staff-field"><span class="staff-label">Localidade <small>Obrigatório</small></span><select class="staff-select" id="announcement-location"><option value="public">Servidor Público</option><option value="private">Servidor Privado</option></select></label>
+              <label class="staff-field staff-hidden" id="announcement-private-url-field"><span class="staff-label">Link do servidor privado <small>Obrigatório no privado</small></span><input class="staff-input" id="announcement-private-url" maxlength="500" placeholder="https://www.roblox.com/share?..." inputmode="url"></label>
+            </div>
+            <label class="staff-field staff-hidden" id="announcement-form-url-field"><span class="staff-label">Link do formulário <small>Google Forms ou equivalente</small></span><input class="staff-input" id="announcement-form-url" maxlength="500" placeholder="https://forms.gle/..." inputmode="url"></label>
+
+            <label class="staff-field"><span class="staff-label" id="announcement-assistants-label">Auxiliares <small>Obrigatório</small></span><textarea class="staff-textarea" id="announcement-assistants" maxlength="1000" placeholder="Informe quem auxiliará a atividade."></textarea></label>
+            <div class="staff-inline-grid">
+              <label class="staff-field"><span class="staff-label">Duração estimada <small>Obrigatório</small></span><input class="staff-input" id="announcement-duration" maxlength="120" placeholder="ex.: 45 minutos"></label>
+              <label class="staff-field"><span class="staff-label">Tempo de tolerância <small>Obrigatório</small></span><input class="staff-input" id="announcement-tolerance" maxlength="120" placeholder="ex.: 10 minutos"></label>
+            </div>
+            <label class="staff-field"><span class="staff-label">Patentes participantes <small>[REC] até [GEN-D]</small></span><div class="staff-ranks" id="announcement-ranks"></div></label>
+            <div class="staff-actions"><div><div class="staff-status" id="announcement-submit-status"></div><div class="staff-note">A publicação será enviada ao canal específico da atividade.</div></div><button type="button" class="vx-btn primary" id="announcement-submit">Publicar aviso</button></div>
           </div>
         </div>
       </section>
@@ -2926,10 +2800,11 @@ p{margin:0}
     });
   });
 
-  // Horizontal unit track on desktop.
+  // Optional landing animations only run when their sections exist.
   const mm = gsap.matchMedia();
   mm.add("(min-width: 821px)", () => {
     const trilho = $("#trilho");
+    if (!trilho) return;
     const distancia = () => trilho.scrollWidth - window.innerWidth + 40;
     const tween = gsap.to(trilho, { x: () => -distancia(), ease: "none" });
     ScrollTrigger.create({
@@ -2938,19 +2813,22 @@ p{margin:0}
     });
   });
 
-  // Enlistment progress line
-  gsap.to("#avanco", {
-    scaleX: 1, ease: "none",
-    scrollTrigger: { trigger: ".etapas", start: "top 78%", end: "bottom 65%", scrub: .6 }
-  });
+  const avanco = $("#avanco");
+  if (avanco) {
+    gsap.to(avanco, {
+      scaleX: 1, ease: "none",
+      scrollTrigger: { trigger: ".etapas", start: "top 78%", end: "bottom 65%", scrub: .6 }
+    });
+  }
 
-  // Stamp
   const carimbo = $("#carimbo");
-  gsap.set(carimbo, { opacity: 0, scale: 2.4, rotate: -22 });
-  ScrollTrigger.create({
-    trigger: ".alistamento", start: "top 62%", once: true,
-    onEnter: () => gsap.to(carimbo, { opacity: .85, scale: 1, rotate: -9, duration: .45, ease: "back.out(2.4)" })
-  });
+  if (carimbo) {
+    gsap.set(carimbo, { opacity: 0, scale: 2.4, rotate: -22 });
+    ScrollTrigger.create({
+      trigger: ".alistamento", start: "top 62%", once: true,
+      onEnter: () => gsap.to(carimbo, { opacity: .85, scale: 1, rotate: -9, duration: .45, ease: "back.out(2.4)" })
+    });
+  }
 
   // Voxel panel
   const marcaVoxel = $("#marca-voxel");
@@ -3152,17 +3030,26 @@ p{margin:0}
   }
 
 
-  /* ---------- staff reports ---------- */
+  /* ---------- staff reports & operational announcements ---------- */
   const STAFF_REPORT_ENDPOINT = "https://voxel-support-api-production.up.railway.app/api/staff-reports";
+  const OPERATIONAL_ANNOUNCEMENT_ENDPOINT = "https://voxel-support-api-production.up.railway.app/api/operational-announcements";
   const STAFF_REPORT_TOKEN_KEY = "voxel-staff-report-token";
+  const OPERATIONAL_RANKS = [
+    [1, "[REC] Recruta"], [2, "[SLD] Soldado"], [3, "[CB] Cabo"], [4, "[T-SGT] Terceiro-Sargento"],
+    [5, "[S-SGT] Segundo-Sargento"], [6, "[P-SGT] Primeiro-Sargento"], [7, "[S-BTN] Sub-Tenente"], [8, "[AAO] Aspirante-A-Oficial"],
+    [9, "[S-TN] Segundo-Tenente"], [10, "[P-TN] Primeiro-Tenente"], [11, "[CAP] Capitão"], [12, "[MAJ] Major"],
+    [13, "[TEN-C] Tenente-Coronel"], [14, "[COR] Coronel"], [15, "[GEN-B] General-De-Brigada"], [16, "[GEN-D] General-De-Divisao"]
+  ];
   const staffAuthView = $("#staff-auth-view");
   const staffFormView = $("#staff-form-view");
   const staffCode = $("#staff-code");
   const staffAuthStatus = $("#staff-auth-status");
   const staffSubmitStatus = $("#staff-submit-status");
+  const announcementSubmitStatus = $("#announcement-submit-status");
   const staffFiles = $("#staff-files");
   const staffProof = $("#staff-proof");
   let staffReportType = "recruitment";
+  let announcementType = "training";
   let staffProofs = [];
 
   const setStaffStatus = (el, text, type = "") => {
@@ -3173,9 +3060,10 @@ p{margin:0}
 
   const setStaffProfile = profile => {
     if (!profile) return;
+    const presenter = profile.instructor || `${profile.militaryLabel || ""} ${profile.characterName || profile.username || ""}`.trim();
     $("#staff-profile-name").textContent = profile.characterName || profile.username || `Roblox ${profile.robloxUserId}`;
     $("#staff-profile-meta").textContent = `${profile.militaryLabel || `Rank ${profile.militaryRank}`} · Roblox ${profile.robloxUserId}`;
-    $("#staff-instructor").value = profile.instructor || `${profile.militaryLabel || ""} ${profile.characterName || profile.username || ""}`.trim();
+    $$(".staff-presenter").forEach(input => { input.value = presenter; });
     staffAuthView?.classList.add("staff-hidden");
     staffFormView?.classList.remove("staff-hidden");
   };
@@ -3187,12 +3075,15 @@ p{margin:0}
     if (staffCode) staffCode.value = "";
   };
 
-  const staffRequest = async (path, options = {}) => {
-    const response = await fetch(`${STAFF_REPORT_ENDPOINT}${path}`, options);
+  const apiRequest = async (endpoint, path, options = {}) => {
+    const response = await fetch(`${endpoint}${path}`, options);
     const body = await response.json().catch(() => ({}));
     if (!response.ok || body.success !== true) throw new Error(body.error || "Não foi possível concluir a solicitação.");
     return body.data;
   };
+
+  const staffRequest = (path, options = {}) => apiRequest(STAFF_REPORT_ENDPOINT, path, options);
+  const announcementRequest = (path, options = {}) => apiRequest(OPERATIONAL_ANNOUNCEMENT_ENDPOINT, path, options);
 
   const restoreStaffSession = async () => {
     const token = sessionStorage.getItem(STAFF_REPORT_TOKEN_KEY);
@@ -3225,9 +3116,18 @@ p{margin:0}
 
   $("#staff-logout")?.addEventListener("click", clearStaffSession);
 
-  $$("[data-report-type]").forEach(button => button.addEventListener("click", () => {
+  $$('[data-staff-mode]').forEach(button => button.addEventListener("click", () => {
+    const mode = button.dataset.staffMode === "announcements" ? "announcements" : "reports";
+    $$('[data-staff-mode]').forEach(item => item.classList.toggle("active", item === button));
+    $("#staff-reports-mode")?.classList.toggle("staff-hidden", mode !== "reports");
+    $("#staff-announcements-mode")?.classList.toggle("staff-hidden", mode !== "announcements");
+    setStaffStatus(staffSubmitStatus, "");
+    setStaffStatus(announcementSubmitStatus, "");
+  }));
+
+  $$('[data-report-type]').forEach(button => button.addEventListener("click", () => {
     staffReportType = button.dataset.reportType === "training" ? "training" : "recruitment";
-    $$("[data-report-type]").forEach(item => item.classList.toggle("active", item === button));
+    $$('[data-report-type]').forEach(item => item.classList.toggle("active", item === button));
     $("#staff-recruits-field")?.classList.toggle("staff-hidden", staffReportType !== "recruitment");
     $("#staff-promoted-field")?.classList.toggle("staff-hidden", staffReportType !== "training");
     setStaffStatus(staffSubmitStatus, "");
@@ -3282,6 +3182,76 @@ p{margin:0}
     }
   });
 
+  const rankContainer = $("#announcement-ranks");
+  if (rankContainer) {
+    rankContainer.innerHTML = OPERATIONAL_RANKS.map(([rank, label]) => `<label class="staff-rank"><input type="checkbox" value="${rank}"><span>${label}</span></label>`).join("");
+  }
+
+  const updateAnnouncementType = () => {
+    const isExam = announcementType === "exam";
+    $("#announcement-presenter-label").firstChild.textContent = isExam ? "Aplicador " : "Instrutor ";
+    $("#announcement-assistants-label").firstChild.textContent = isExam ? "Corretores " : "Auxiliares ";
+    $("#announcement-training-location")?.classList.toggle("staff-hidden", isExam);
+    $("#announcement-form-url-field")?.classList.toggle("staff-hidden", !isExam);
+    setStaffStatus(announcementSubmitStatus, "");
+  };
+
+  $$('[data-announcement-type]').forEach(button => button.addEventListener("click", () => {
+    announcementType = button.dataset.announcementType === "exam" ? "exam" : "training";
+    $$('[data-announcement-type]').forEach(item => item.classList.toggle("active", item === button));
+    updateAnnouncementType();
+  }));
+
+  $("#announcement-location")?.addEventListener("change", event => {
+    $("#announcement-private-url-field")?.classList.toggle("staff-hidden", event.target.value !== "private");
+  });
+
+  $("#announcement-submit")?.addEventListener("click", async () => {
+    const token = sessionStorage.getItem(STAFF_REPORT_TOKEN_KEY);
+    if (!token) { clearStaffSession(); return; }
+
+    const assistants = $("#announcement-assistants")?.value.trim() || "";
+    const duration = $("#announcement-duration")?.value.trim() || "";
+    const tolerance = $("#announcement-tolerance")?.value.trim() || "";
+    const targetRanks = $$("#announcement-ranks input:checked").map(input => Number(input.value));
+    const locationType = $("#announcement-location")?.value || "public";
+    const privateServerUrl = $("#announcement-private-url")?.value.trim() || "";
+    const formUrl = $("#announcement-form-url")?.value.trim() || "";
+
+    if (!assistants || !duration || !tolerance || !targetRanks.length) {
+      setStaffStatus(announcementSubmitStatus, "Preencha todos os campos obrigatórios e selecione ao menos uma patente.", "error");
+      return;
+    }
+    if (announcementType === "training" && locationType === "private" && !privateServerUrl) {
+      setStaffStatus(announcementSubmitStatus, "Informe o link do servidor privado.", "error");
+      return;
+    }
+    if (announcementType === "exam" && !formUrl) {
+      setStaffStatus(announcementSubmitStatus, "Informe o link do formulário do exame.", "error");
+      return;
+    }
+
+    setStaffStatus(announcementSubmitStatus, "Publicando aviso...");
+    try {
+      await announcementRequest("/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ announcementType, assistants, duration, tolerance, targetRanks, locationType, privateServerUrl, formUrl })
+      });
+      setStaffStatus(announcementSubmitStatus, "Aviso publicado no Discord com sucesso.", "success");
+      $("#announcement-assistants").value = "";
+      $("#announcement-duration").value = "";
+      $("#announcement-tolerance").value = "";
+      $("#announcement-private-url").value = "";
+      $("#announcement-form-url").value = "";
+      $$("#announcement-ranks input").forEach(input => { input.checked = false; });
+    } catch (error) {
+      if (/sessão/i.test(error.message)) clearStaffSession();
+      setStaffStatus(announcementSubmitStatus, error.message, "error");
+    }
+  });
+
+  updateAnnouncementType();
   restoreStaffSession();
 
 
