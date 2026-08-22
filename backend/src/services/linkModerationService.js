@@ -1,10 +1,10 @@
 import {
   EmbedBuilder,
-  Events,
-  PermissionFlagsBits
+  Events
 } from "discord.js";
 import { EB_VERIFICATION_CONFIG } from "../config/ebVerificationConfig.js";
 import { VOXEL_GUILD_CONFIG } from "../config/voxelGuildConfig.js";
+import { hasAdministratorAccess } from "../utils/staffAccess.js";
 
 const LINK_PATTERN = /(?:https?:\/\/|www\.|discord\.gg\/|discord(?:app)?\.com\/invite\/|(?:[a-z0-9-]+\.)+(?:com|net|org|gg|io|dev|app|br|me|xyz|co|tv)(?:\/|\b))/i;
 const ROOT_PATH = "voxel/v1/moderation/linkWarnings";
@@ -27,7 +27,7 @@ export class LinkModerationService {
   }
 
   canSendLinks(member) {
-    if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
+    if (hasAdministratorAccess(member)) return true;
     return VOXEL_GUILD_CONFIG.linkAllowedRoleKeys
       .map((key) => this.roleIds[key])
       .filter(Boolean)
