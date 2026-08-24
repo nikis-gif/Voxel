@@ -1,9 +1,33 @@
 import { AttachmentBuilder, EmbedBuilder } from "discord.js";
+import { VOXEL_GUILD_CONFIG } from "../config/voxelGuildConfig.js";
 import { safeAttachmentName } from "../utils/text.js";
 
 const PRIMARY_COLOR = 0x3366ff;
+const REPORT_COLOR = 0xed4245;
 const ATTACHMENT_COLOR = 0x2b2d31;
 const ERROR_COLOR = 0xed4245;
+
+const SUPPORT_META = Object.freeze({
+  technical: Object.freeze({
+    label: "Suporte técnico",
+    title: "Nova solicitação de suporte técnico",
+    description: "Um erro ou problema técnico foi enviado pelo site do Voxel."
+  }),
+  report: Object.freeze({
+    label: "Denúncia",
+    title: "Nova denúncia de jogador",
+    description: "Uma denúncia foi encaminhada para análise da equipe responsável."
+  }),
+  other: Object.freeze({
+    label: "Dúvida ou outro assunto",
+    title: "Nova solicitação de suporte",
+    description: "Uma nova solicitação foi enviada pelo site do Voxel."
+  })
+});
+
+function getSupportMeta(type) {
+  return SUPPORT_META[type] ?? SUPPORT_META.technical;
+}
 
 function formatBytes(bytes) {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 KB";
@@ -29,19 +53,25 @@ function buildAttachments(files) {
 
 function buildTicketEmbed(ticket, botAvatar) {
   const createdAt = Math.floor(ticket.createdAt.getTime() / 1000);
+  const meta = getSupportMeta(ticket.type);
   const attachmentText = ticket.files.length === 0
     ? "Nenhum anexo enviado."
     : `${ticket.files.length} ${ticket.files.length === 1 ? "imagem anexada" : "imagens anexadas"} abaixo.`;
 
   return new EmbedBuilder()
-    .setColor(PRIMARY_COLOR)
+    .setColor(ticket.type === "report" ? REPORT_COLOR : PRIMARY_COLOR)
     .setAuthor({
       name: "Voxel • Central de Suporte",
       iconURL: botAvatar
     })
-    .setTitle("Nova solicitação de suporte")
-    .setDescription("Um novo atendimento foi enviado pelo site do Voxel.")
+    .setTitle(meta.title)
+    .setDescription(meta.description)
     .addFields(
+      {
+        name: "Tipo",
+        value: meta.label,
+        inline: true
+      },
       {
         name: "Solicitante",
         value: `\`${ticket.sender}\``,
@@ -53,7 +83,7 @@ function buildTicketEmbed(ticket, botAvatar) {
         inline: true
       },
       {
-        name: "Problema relatado",
+        name: ticket.type === "report" ? "Denúncia" : "Relato",
         value: ticket.message,
         inline: false
       },
@@ -93,6 +123,21 @@ export class DiscordSupportService {
     this.ownerId = ownerId;
   }
 
+  async getDestination(ticket) {
+    if (ticket.type === "report") {
+      const channel = await this.client.channels.fetch(VOXEL_GUILD_CONFIG.supportReportChannelId).catch(() => null);
+      if (!channel?.isTextBased()) {
+        const error = new Error("O canal de denúncias está indisponível no momento. Tente novamente em alguns instantes.");
+        error.statusCode = 503;
+        throw error;
+      }
+
+      return channel;
+    }
+
+    return this.client.users.fetch(this.ownerId);
+  }
+
   async sendTicket(ticket) {
     if (!this.client.isReady()) {
       const error = new Error("O suporte está iniciando. Tente novamente em alguns segundos.");
@@ -100,12 +145,12 @@ export class DiscordSupportService {
       throw error;
     }
 
-    const owner = await this.client.users.fetch(this.ownerId);
+    const destination = await this.getDestination(ticket);
     const botAvatar = this.client.user?.displayAvatarURL({ size: 128 }) ?? undefined;
     const preparedFiles = buildAttachments(ticket.files);
     const ticketEmbed = buildTicketEmbed(ticket, botAvatar);
 
-    await owner.send({
+    await destination.send({
       embeds: [ticketEmbed],
       allowedMentions: { parse: [] }
     });
@@ -123,7 +168,7 @@ export class DiscordSupportService {
       );
 
       try {
-        await owner.send({
+        await destination.send({
           embeds: [attachmentEmbed],
           files: [file.attachment],
           allowedMentions: { parse: [] }
@@ -135,7 +180,7 @@ export class DiscordSupportService {
     }
 
     if (failedAttachments.length > 0) {
-      await owner.send({
+      await destination.send({
         embeds: [
           new EmbedBuilder()
             .setColor(ERROR_COLOR)
@@ -151,6 +196,8 @@ export class DiscordSupportService {
       }).catch(() => {});
     }
 
+    console.info(`[support:${ticket.id}] ${ticket.type === "report" ? "Report" : "Support"} delivered.`);
     return { failedAttachments };
   }
 }
+
