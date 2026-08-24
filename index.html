@@ -3331,9 +3331,15 @@ p{margin:0}
     try {
       const dados = new FormData();
       const categoria = vxTipo?.value || 'Suporte técnico';
+      const tipoSolicitacao = categoria === 'Denúncia'
+        ? 'report'
+        : categoria === 'Dúvida ou outro assunto'
+          ? 'other'
+          : 'technical';
 
+      dados.append('type', tipoSolicitacao);
       dados.append('sender', vxUsuario.value.trim());
-      dados.append('message', `[${categoria}]\n${vxProblema.value.trim()}`);
+      dados.append('message', vxProblema.value.trim());
       dados.append('website', '');
       vxAnexos.forEach(file => dados.append('images', file));
 
