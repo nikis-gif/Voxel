@@ -40,9 +40,13 @@ export function createGameBridgeController(gameBridgeService, gamePresenceServic
         action = await gameBridgeService.poll(serverId, onlineUserIds);
       } catch (error) {
         console.error(`[bridge] Queue poll failed for ${serverId}:`, error);
-        const bridgeError = new Error("O servidor conectou ao Voxel, mas a fila de comunidades não pôde ser consultada.");
-        bridgeError.statusCode = 503;
-        throw bridgeError;
+        const rawCode = typeof error?.code === "string" ? error.code : "QUEUE_BACKEND_ERROR";
+        const safeCode = rawCode.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80) || "QUEUE_BACKEND_ERROR";
+        res.status(503).json({
+          success: false,
+          error: `A fila de comunidades está indisponível no backend (${safeCode}).`
+        });
+        return;
       }
 
       res.json({ success: true, data: action });
