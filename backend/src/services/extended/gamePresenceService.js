@@ -1,5 +1,7 @@
 const ROOT = "voxel/v1/presence";
 const SERVER_STALE_MS = 90_000;
+const BRIDGE_STALE_MS = 20_000;
+const BRIDGE_PERSIST_INTERVAL_MS = 10_000;
 const MAX_DELTA_SECONDS = 30;
 
 function dayKey(timestamp = Date.now()) {
@@ -24,6 +26,34 @@ function normalizePlayer(player) {
 export class GamePresenceService {
   constructor(database) {
     this.root = database.ref(ROOT);
+    this.bridgeHeartbeats = new Map();
+    this.bridgePersistedAt = new Map();
+  }
+
+  async recordBridgeHeartbeat({ serverId, placeId, bridgeVersion, onlineUserIds = [] }) {
+    const timestamp = Date.now();
+    const id = String(serverId);
+    const normalizedOnlineIds = Array.isArray(onlineUserIds)
+      ? onlineUserIds
+        .map((value) => Number(value))
+        .filter((value) => Number.isSafeInteger(value) && value > 0)
+        .slice(0, 100)
+      : [];
+    const record = {
+      serverId: id,
+      placeId: Number(placeId) || 0,
+      bridgeVersion: String(bridgeVersion ?? "unknown").slice(0, 40),
+      bridgePlayerCount: normalizedOnlineIds.length,
+      bridgeLastSeenAt: timestamp
+    };
+
+    this.bridgeHeartbeats.set(id, record);
+
+    const lastPersistedAt = Number(this.bridgePersistedAt.get(id) ?? 0);
+    if (timestamp - lastPersistedAt < BRIDGE_PERSIST_INTERVAL_MS) return;
+
+    this.bridgePersistedAt.set(id, timestamp);
+    await this.root.child(`servers/${id}`).update(record);
   }
 
   async recordHeartbeat({ serverId, placeId, maxPlayers, players }) {
@@ -34,7 +64,7 @@ export class GamePresenceService {
     const deltaSeconds = Math.max(0, Math.min(MAX_DELTA_SECONDS, Math.floor((now - previousAt) / 1000)));
     const normalizedPlayers = Array.isArray(players) ? players.map(normalizePlayer).filter(Boolean).slice(0, 100) : [];
 
-    await serverRef.set({
+    await serverRef.update({
       serverId: String(serverId),
       placeId: Number(placeId) || 0,
       maxPlayers: Math.max(0, Math.floor(Number(maxPlayers ?? 0))),
@@ -73,6 +103,38 @@ export class GamePresenceService {
       .filter((server) => server && now - Number(server.lastSeenAt ?? 0) <= SERVER_STALE_MS)
       .sort((a, b) => Number(b.playerCount ?? 0) - Number(a.playerCount ?? 0));
     return entries;
+  }
+
+
+  async listBridgeServers() {
+    const timestamp = Date.now();
+    const merged = new Map();
+
+    for (const [serverId, server] of this.bridgeHeartbeats.entries()) {
+      if (timestamp - Number(server.bridgeLastSeenAt ?? 0) > BRIDGE_STALE_MS) {
+        this.bridgeHeartbeats.delete(serverId);
+        continue;
+      }
+      merged.set(serverId, server);
+    }
+
+    const snapshot = await this.root.child("servers").get();
+    for (const server of Object.values(snapshot.val() ?? {})) {
+      if (!server || timestamp - Number(server.bridgeLastSeenAt ?? 0) > BRIDGE_STALE_MS) continue;
+      const serverId = String(server.serverId ?? "");
+      if (!serverId) continue;
+      const current = merged.get(serverId);
+      if (!current || Number(server.bridgeLastSeenAt ?? 0) > Number(current.bridgeLastSeenAt ?? 0)) {
+        merged.set(serverId, server);
+      }
+    }
+
+    return [...merged.values()]
+      .map((server) => ({
+        ...server,
+        bridgeAgeMs: Math.max(0, timestamp - Number(server.bridgeLastSeenAt ?? timestamp))
+      }))
+      .sort((a, b) => Number(b.bridgeLastSeenAt ?? 0) - Number(a.bridgeLastSeenAt ?? 0));
   }
 
   async listOnlinePlayers() {
