@@ -73,7 +73,6 @@ export class GuildPolicyService {
     if (!this.client.isReady()) return;
     const guild = await this.client.guilds.fetch(this.guildId);
     const botId = this.client.user.id;
-    const staffRoleIds = this.staffRoleIds();
 
     for (const channelId of VOXEL_GUILD_CONFIG.staffManagedChannelIds) {
       const channel = await guild.channels.fetch(channelId).catch(() => null);
@@ -82,26 +81,30 @@ export class GuildPolicyService {
         continue;
       }
 
-      await channel.permissionOverwrites.edit(guild.roles.everyone, {
-        ViewChannel: true,
-        ReadMessageHistory: true,
+      const lockedPermissions = {
         SendMessages: false,
         AddReactions: false,
         CreatePublicThreads: false,
         CreatePrivateThreads: false,
         SendMessagesInThreads: false,
         Connect: false
-      }, { reason: "Voxel staff-managed channel" }).catch((error) => {
+      };
+
+      await channel.permissionOverwrites.edit(guild.roles.everyone, {
+        ViewChannel: true,
+        ReadMessageHistory: true,
+        ...lockedPermissions
+      }, { reason: "Voxel read-only channel" }).catch((error) => {
         console.error(`[policy] Failed to restrict channel ${channelId}:`, error);
       });
 
-      for (const roleId of staffRoleIds) {
-        await channel.permissionOverwrites.edit(roleId, {
-          SendMessages: true,
-          AddReactions: true,
-          ReadMessageHistory: true,
-          Connect: true
-        }, { reason: "Voxel staff-managed channel access" }).catch(() => {});
+      // Remove legacy role/member grants so no human overwrite can restore posting or voice access.
+      for (const overwrite of channel.permissionOverwrites.cache.values()) {
+        if (overwrite.id === guild.roles.everyone.id || overwrite.id === botId) continue;
+
+        await channel.permissionOverwrites.edit(overwrite.id, lockedPermissions, {
+          reason: "Voxel read-only channel enforcement"
+        }).catch(() => {});
       }
 
       await channel.permissionOverwrites.edit(botId, {
@@ -112,10 +115,10 @@ export class GuildPolicyService {
         AttachFiles: true,
         AddReactions: true,
         Connect: true
-      }, { reason: "Voxel staff-managed channel bot access" }).catch(() => {});
+      }, { reason: "Voxel read-only channel bot access" }).catch(() => {});
     }
 
-    console.log(`[policy] Restricted ${VOXEL_GUILD_CONFIG.staffManagedChannelIds.length} channel(s) to staff posting/voice access.`);
+    console.log(`[policy] Locked ${VOXEL_GUILD_CONFIG.staffManagedChannelIds.length} channel(s) to bot-only posting/voice access.`);
   }
 
   async enforceMessage(message) {
@@ -128,9 +131,9 @@ export class GuildPolicyService {
       return;
     }
 
-    if (this.isStaffManagedChannel(message.channelId) && !this.isStaff(message.member)) {
+    if (this.isStaffManagedChannel(message.channelId)) {
       await message.delete().catch(() => {});
-      console.info(`[policy] Removed player message from staff-managed channel ${message.channelId}.`);
+      console.info(`[policy] Removed human message from read-only channel ${message.channelId}.`);
     }
   }
 
@@ -138,10 +141,10 @@ export class GuildPolicyService {
     if (newState.guild.id !== this.guildId) return;
     if (!newState.channelId || newState.channelId === oldState.channelId) return;
     if (!this.isStaffManagedChannel(newState.channelId)) return;
-    if (this.isStaff(newState.member)) return;
+    if (newState.id === this.client.user?.id) return;
 
-    await newState.disconnect("Voxel staff-managed channel").catch(() => {});
-    console.info(`[policy] Disconnected player ${newState.id} from staff-managed channel ${newState.channelId}.`);
+    await newState.disconnect("Voxel read-only channel").catch(() => {});
+    console.info(`[policy] Disconnected member ${newState.id} from read-only channel ${newState.channelId}.`);
   }
 
   init() {
