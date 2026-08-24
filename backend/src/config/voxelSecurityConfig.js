@@ -1,5 +1,6 @@
 export const VOXEL_OWNER_IDS = Object.freeze([
-  "1134320234388525086"
+  "1134320234388525086",
+  "1539860114347917322"
 ]);
 
 export const VOXEL_SECURITY_CONFIG = Object.freeze({
