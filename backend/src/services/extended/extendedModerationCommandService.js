@@ -605,6 +605,7 @@ export class ExtendedModerationCommandService {
   }
 
   async communityDetails(interaction) {
+    this.assertOwner(interaction);
     const name = interaction.options.getString("comunidade", true).trim();
     const cached = await this.verificationService.getLinkedProfile(interaction.user.id);
     return this.gameBridgeService.request("community-details", { name, viewerRobloxUserId: cached?.link?.robloxUserId ?? 0 });
@@ -718,7 +719,8 @@ export class ExtendedModerationCommandService {
         { name: "Moderação", value: "`/advertir` `/mute` `/unmute` `/kick` `/warns` `/history` `/player-info` `/report`", inline: false },
         { name: "Segurança", value: "`/lock-chat` `/lockdown` `/security-status` `/anti-raid` `/anti-nuke`", inline: false },
         { name: "Tickets", value: "`/ticket` `/ticket-claim` `/ticket-add` `/ticket-remove` `/ticket-close`", inline: false },
-        { name: "Administração", value: "`/sync-me` `/sync-roles` `/sync-all` `/verified-list` `/modlogs` `/server-status`", inline: false }
+        { name: "Administração", value: "`/sync-me` `/sync-roles` `/sync-all` `/verified-list` `/modlogs` `/server-status`", inline: false },
+        { name: "Comunidades • Donos", value: "`/change-rank-game` `/community-add` `/community-remove` `/community-queue` `/procurar-comunidade` `/community-members` `/community-ranks` `/community-profile`", inline: false }
       );
     await interaction.reply({ flags: MessageFlags.Ephemeral, embeds: [embed] });
   }
