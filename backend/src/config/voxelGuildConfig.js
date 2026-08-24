@@ -14,6 +14,12 @@ export const VOXEL_GUILD_CONFIG = Object.freeze({
     "1540408286531158026"
   ]),
 
+  staffManagedChannelIds: Object.freeze([
+    "1541454959961444564",
+    "1540412778332954746",
+    "1540412870314037309"
+  ]),
+
   privilegedRoleIds: Object.freeze([
     "1540720238381760672",
     "1540720232359006298"
@@ -23,6 +29,13 @@ export const VOXEL_GUILD_CONFIG = Object.freeze({
     "oficiais",
     "superiores",
     "comandantes"
+  ]),
+
+  supportResponderRoleKeys: Object.freeze([
+    "oficiais",
+    "superiores",
+    "comandantes",
+    "administradores"
   ]),
 
   linkTimeouts: Object.freeze({
