@@ -3,8 +3,9 @@ import { createHash, randomUUID } from "node:crypto";
 const ROOT_PATH = "voxel/v1/communityOperations";
 const CLAIM_TTL_MS = 45_000;
 const CLAIM_CANDIDATE_LIMIT = 100;
-const RECENT_SCAN_LIMIT = 100;
+const RECENT_SCAN_LIMIT = 200;
 const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
+const ACTIVE_STATUSES = new Set(["pending", "processing"]);
 const ALLOWED_TYPES = new Set([
   "community-add-member",
   "community-remove-member",
@@ -41,26 +42,161 @@ function normalizeOperation(snapshotValue) {
       : {},
     createdAt: Number(snapshotValue.createdAt ?? 0),
     updatedAt: Number(snapshotValue.updatedAt ?? 0),
-    attempts: Math.max(0, Number(snapshotValue.attempts ?? 0))
+    attempts: Math.max(0, Number(snapshotValue.attempts ?? 0)),
+    queueKey: typeof snapshotValue.queueKey === "string" ? snapshotValue.queueKey : null,
+    recentKey: typeof snapshotValue.recentKey === "string" ? snapshotValue.recentKey : null
   };
+}
+
+function indexTimestamp(value, fallback = now()) {
+  const parsed = Math.floor(Number(value));
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function makeIndexKey(timestamp, operationId) {
+  return `${String(indexTimestamp(timestamp)).padStart(13, "0")}_${String(operationId)}`;
+}
+
+function validateOperation(operation) {
+  if (!operation?.id) return "Operação sem ID.";
+  if (!ALLOWED_TYPES.has(operation.type)) return `Tipo de operação inválido: ${operation.type || "vazio"}.`;
+
+  const communityName = String(operation.payload?.communityName ?? "").trim();
+  if (!communityName) return "Comunidade não informada.";
+
+  const userId = Number(operation.payload?.targetRobloxUserId ?? 0);
+  if (!Number.isSafeInteger(userId) || userId <= 0) return "Roblox UserId inválido.";
+
+  if (operation.type === "community-set-rank" || operation.type === "community-add-member") {
+    const rank = Number(operation.payload?.rank ?? 0);
+    if (!Number.isInteger(rank) || rank <= 0 || rank > 255) return "Rank inválido.";
+  }
+
+  return null;
+}
+
+function errorSummary(error) {
+  const message = typeof error?.message === "string" && error.message.trim()
+    ? error.message.trim()
+    : String(error ?? "Unknown queue error");
+  return message.slice(0, 500);
 }
 
 export class CommunityOperationStore {
   constructor({ database }) {
     this.root = database.ref(ROOT_PATH);
     this.operationsRef = this.root.child("operations");
-    this.pendingRef = this.root.child("pending");
-    this.recentRef = this.root.child("recent");
+    this.pendingRef = this.root.child("pendingV2");
+    this.recentRef = this.root.child("recentV2");
+    this.legacyPendingRef = this.root.child("pending");
+    this.legacyRecentRef = this.root.child("recent");
     this.locksRef = this.root.child("locks");
+
+    this.initPromise = null;
+    this.lastError = null;
+    this.lastErrorAt = 0;
+    this.lastClaimAt = 0;
+    this.lastClaimedOperationId = null;
+  }
+
+  async init() {
+    if (this.initPromise) return this.initPromise;
+
+    this.initPromise = this.migrateLegacyIndexes()
+      .then((result) => {
+        this.clearError();
+        return result;
+      })
+      .catch((error) => {
+        this.recordError(error);
+        this.initPromise = null;
+        throw error;
+      });
+
+    return this.initPromise;
+  }
+
+  async migrateLegacyIndexes() {
+    const [legacyPendingSnapshot, legacyRecentSnapshot] = await Promise.all([
+      this.legacyPendingRef.get(),
+      this.legacyRecentRef.get()
+    ]);
+
+    const pendingEntries = [];
+    legacyPendingSnapshot.forEach((child) => {
+      if (!child.key) return;
+      pendingEntries.push({
+        id: child.key,
+        timestamp: indexTimestamp(child.val(), 0)
+      });
+    });
+
+    const updates = {};
+    let migratedPending = 0;
+    let migratedRecent = 0;
+
+    if (pendingEntries.length > 0) {
+      const operationSnapshots = await Promise.all(
+        pendingEntries.map((entry) => this.operationsRef.child(entry.id).get())
+      );
+
+      for (let index = 0; index < pendingEntries.length; index += 1) {
+        const entry = pendingEntries[index];
+        const operation = normalizeOperation(operationSnapshots[index].val());
+
+        if (operation && ACTIVE_STATUSES.has(operation.status)) {
+          const queueKey = operation.queueKey
+            || makeIndexKey(entry.timestamp || operation.createdAt, entry.id);
+          updates[`pendingV2/${queueKey}`] = entry.id;
+          updates[`operations/${entry.id}/queueKey`] = queueKey;
+          migratedPending += 1;
+        }
+
+        updates[`pending/${entry.id}`] = null;
+      }
+    }
+
+    legacyRecentSnapshot.forEach((child) => {
+      if (!child.key) return;
+      const timestamp = indexTimestamp(child.val(), 0);
+      const recentKey = makeIndexKey(timestamp, child.key);
+      updates[`recentV2/${recentKey}`] = child.key;
+      updates[`recent/${child.key}`] = null;
+      migratedRecent += 1;
+    });
+
+    if (Object.keys(updates).length > 0) {
+      await this.root.update(updates);
+    }
+
+    if (migratedPending > 0 || migratedRecent > 0) {
+      console.log(`[community-queue] Migrated legacy indexes: ${migratedPending} pending, ${migratedRecent} recent.`);
+    }
+
+    return { migratedPending, migratedRecent };
+  }
+
+  recordError(error) {
+    this.lastError = errorSummary(error);
+    this.lastErrorAt = now();
+  }
+
+  clearError() {
+    this.lastError = null;
+    this.lastErrorAt = 0;
   }
 
   async enqueue({ type, payload, createdByDiscordId }) {
+    await this.init();
+
     if (!ALLOWED_TYPES.has(type)) {
       throw new Error(`Unsupported community operation type: ${type}`);
     }
 
     const id = randomUUID();
     const timestamp = now();
+    const queueKey = makeIndexKey(timestamp, id);
+    const recentKey = queueKey;
     const record = {
       id,
       type,
@@ -76,38 +212,63 @@ export class CommunityOperationStore {
       lastServerId: null,
       completedAt: null,
       result: null,
-      error: null
+      error: null,
+      queueKey,
+      recentKey
     };
+
+    const validationError = validateOperation(record);
+    if (validationError) throw new Error(validationError);
 
     await this.root.update({
       [`operations/${id}`]: record,
-      [`pending/${id}`]: timestamp,
-      [`recent/${id}`]: timestamp
+      [`pendingV2/${queueKey}`]: id,
+      [`recentV2/${recentKey}`]: id
     });
 
     return record;
   }
 
   async get(id) {
+    await this.init();
     const snapshot = await this.operationsRef.child(String(id)).get();
     return normalizeOperation(snapshot.val());
   }
 
-  async claimNext(serverId) {
-    const timestamp = now();
-    const pendingSnapshot = await this.pendingRef
-      .orderByValue()
-      .limitToFirst(CLAIM_CANDIDATE_LIMIT)
-      .get();
+  async readIndex(reference, { newest = false, limit = 100 } = {}) {
+    const boundedLimit = Math.max(1, Math.min(500, Number(limit) || 100));
+    const query = newest
+      ? reference.orderByKey().limitToLast(boundedLimit)
+      : reference.orderByKey().limitToFirst(boundedLimit);
+    const snapshot = await query.get();
+    const entries = [];
 
-    const candidates = [];
-    pendingSnapshot.forEach((child) => {
-      candidates.push({ id: child.key, createdAt: Number(child.val() ?? 0) });
+    snapshot.forEach((child) => {
+      if (!child.key) return;
+      const operationId = typeof child.val() === "string" ? child.val() : String(child.val() ?? "");
+      if (!operationId) return;
+      entries.push({ indexKey: child.key, id: operationId });
     });
-    candidates.sort((a, b) => a.createdAt - b.createdAt);
 
-    let candidateErrors = 0;
-    let lastCandidateError = null;
+    if (newest) entries.reverse();
+    return entries;
+  }
+
+  async claimNext(serverId) {
+    await this.init();
+
+    let candidates;
+    try {
+      candidates = await this.readIndex(this.pendingRef, {
+        newest: false,
+        limit: CLAIM_CANDIDATE_LIMIT
+      });
+    } catch (error) {
+      this.recordError(error);
+      throw error;
+    }
+
+    const timestamp = now();
 
     for (const candidate of candidates) {
       try {
@@ -116,7 +277,18 @@ export class CommunityOperationStore {
         const operation = normalizeOperation(snapshot.val());
 
         if (!operation || TERMINAL_STATUSES.has(operation.status)) {
-          await this.pendingRef.child(candidate.id).remove().catch(() => {});
+          await this.pendingRef.child(candidate.indexKey).remove().catch(() => {});
+          continue;
+        }
+
+        if (operation.queueKey && operation.queueKey !== candidate.indexKey) {
+          await this.pendingRef.child(candidate.indexKey).remove().catch(() => {});
+          continue;
+        }
+
+        const validationError = validateOperation(operation);
+        if (validationError) {
+          await this.failInvalidOperation(operationRef, candidate.indexKey, validationError);
           continue;
         }
 
@@ -147,6 +319,7 @@ export class CommunityOperationStore {
           return {
             ...current,
             resourceKey,
+            queueKey: candidate.indexKey,
             status: "processing",
             claimServerId: serverId,
             claimExpiresAt: timestamp + CLAIM_TTL_MS,
@@ -167,29 +340,52 @@ export class CommunityOperationStore {
           continue;
         }
 
+        this.lastClaimAt = timestamp;
+        this.lastClaimedOperationId = claimed.id;
+        this.clearError();
+
         return {
           id: claimed.id,
           type: claimed.type,
           payload: clone(claimed.payload)
         };
       } catch (error) {
-        candidateErrors += 1;
-        lastCandidateError = error;
+        this.recordError(error);
         console.error(`[community-queue] Failed to inspect/claim ${candidate.id}:`, error);
       }
-    }
-
-    if (candidates.length > 0 && candidateErrors === candidates.length && lastCandidateError) {
-      throw lastCandidateError;
     }
 
     return null;
   }
 
+  async failInvalidOperation(operationRef, queueKey, reason) {
+    const timestamp = now();
+    await operationRef.transaction((current) => {
+      if (!current || typeof current !== "object") return;
+      if (TERMINAL_STATUSES.has(String(current.status ?? ""))) return;
+
+      return {
+        ...current,
+        status: "failed",
+        claimServerId: null,
+        claimExpiresAt: 0,
+        updatedAt: timestamp,
+        completedAt: timestamp,
+        result: null,
+        error: `Operação inválida: ${String(reason).slice(0, 800)}`
+      };
+    });
+
+    await this.pendingRef.child(queueKey).remove().catch(() => {});
+  }
+
   async complete({ serverId, actionId, success, data = null, error = null }) {
+    await this.init();
+
     const operationRef = this.operationsRef.child(String(actionId));
     const timestamp = now();
     let resourceKey = null;
+    let queueKey = null;
 
     const result = await operationRef.transaction((current) => {
       if (!current || typeof current !== "object") return;
@@ -197,6 +393,7 @@ export class CommunityOperationStore {
       if (String(current.claimServerId ?? "") !== String(serverId)) return;
 
       resourceKey = String(current.resourceKey || operationResourceKey(current.payload));
+      queueKey = typeof current.queueKey === "string" ? current.queueKey : null;
       return {
         ...current,
         status: success ? "completed" : "failed",
@@ -211,19 +408,23 @@ export class CommunityOperationStore {
 
     if (!result.committed) return false;
 
-    await this.pendingRef.child(String(actionId)).remove().catch(() => {});
+    if (queueKey) await this.pendingRef.child(queueKey).remove().catch(() => {});
     if (resourceKey) await this.releaseLock(resourceKey, String(actionId), String(serverId));
     return true;
   }
 
   async cancel(id, cancelledByDiscordId) {
+    await this.init();
+
     const operationRef = this.operationsRef.child(String(id));
     const timestamp = now();
+    let queueKey = null;
 
     const result = await operationRef.transaction((current) => {
       if (!current || typeof current !== "object") return;
       if (String(current.status ?? "") !== "pending") return;
 
+      queueKey = typeof current.queueKey === "string" ? current.queueKey : null;
       return {
         ...current,
         status: "cancelled",
@@ -237,18 +438,27 @@ export class CommunityOperationStore {
     });
 
     if (!result.committed) return null;
-    await this.pendingRef.child(String(id)).remove().catch(() => {});
+    if (queueKey) await this.pendingRef.child(queueKey).remove().catch(() => {});
     return normalizeOperation(result.snapshot.val());
   }
 
   async retry(id, retriedByDiscordId) {
+    await this.init();
+
     const operationRef = this.operationsRef.child(String(id));
     const timestamp = now();
+    const queueKey = makeIndexKey(timestamp, id);
+    const recentKey = queueKey;
+    let previousQueueKey = null;
+    let previousRecentKey = null;
 
     const result = await operationRef.transaction((current) => {
       if (!current || typeof current !== "object") return;
       const status = String(current.status ?? "");
       if (status !== "failed" && status !== "cancelled") return;
+
+      previousQueueKey = typeof current.queueKey === "string" ? current.queueKey : null;
+      previousRecentKey = typeof current.recentKey === "string" ? current.recentKey : null;
 
       return {
         ...current,
@@ -259,39 +469,50 @@ export class CommunityOperationStore {
         completedAt: null,
         claimServerId: null,
         claimExpiresAt: 0,
+        queueKey,
+        recentKey,
         result: null,
         error: null
       };
     });
 
     if (!result.committed) return null;
-    await this.pendingRef.child(String(id)).set(timestamp);
-    await this.recentRef.child(String(id)).set(timestamp);
+
+    const updates = {
+      [`pendingV2/${queueKey}`]: String(id),
+      [`recentV2/${recentKey}`]: String(id)
+    };
+    if (previousQueueKey && previousQueueKey !== queueKey) updates[`pendingV2/${previousQueueKey}`] = null;
+    if (previousRecentKey && previousRecentKey !== recentKey) updates[`recentV2/${previousRecentKey}`] = null;
+    await this.root.update(updates);
+
     return normalizeOperation(result.snapshot.val());
   }
 
   async list({ status = "active", limit = 20 } = {}) {
+    await this.init();
+
     const boundedLimit = Math.max(1, Math.min(50, Number(limit) || 20));
-    const recentSnapshot = await this.recentRef
-      .orderByValue()
-      .limitToLast(RECENT_SCAN_LIMIT)
-      .get();
-
-    const ids = [];
-    recentSnapshot.forEach((child) => ids.push({ id: child.key, order: Number(child.val() ?? 0) }));
-    ids.sort((a, b) => b.order - a.order);
-
-    const snapshots = await Promise.all(
-      ids.map((entry) => this.operationsRef.child(entry.id).get())
-    );
-
+    const entries = await this.readIndex(this.recentRef, {
+      newest: true,
+      limit: RECENT_SCAN_LIMIT
+    });
+    const seen = new Set();
     const operations = [];
-    for (const snapshot of snapshots) {
+
+    for (const entry of entries) {
+      if (seen.has(entry.id)) continue;
+      seen.add(entry.id);
+
+      const snapshot = await this.operationsRef.child(entry.id).get();
       const operation = normalizeOperation(snapshot.val());
-      if (!operation) continue;
+      if (!operation) {
+        await this.recentRef.child(entry.indexKey).remove().catch(() => {});
+        continue;
+      }
 
       const matches = status === "all"
-        || (status === "active" && (operation.status === "pending" || operation.status === "processing"))
+        || (status === "active" && ACTIVE_STATUSES.has(operation.status))
         || operation.status === status;
       if (!matches) continue;
 
@@ -302,14 +523,38 @@ export class CommunityOperationStore {
     return operations;
   }
 
+  async diagnostics() {
+    await this.init();
+
+    const [pendingSnapshot, recentSnapshot] = await Promise.all([
+      this.pendingRef.get(),
+      this.recentRef.get()
+    ]);
+
+    return {
+      queueVersion: 2,
+      pendingCount: pendingSnapshot.numChildren(),
+      recentIndexCount: recentSnapshot.numChildren(),
+      lastClaimAt: this.lastClaimAt || null,
+      lastClaimedOperationId: this.lastClaimedOperationId,
+      lastError: this.lastError,
+      lastErrorAt: this.lastErrorAt || null
+    };
+  }
+
   async waitForTerminal(id, timeoutMs = 6_000) {
+    await this.init();
+
     const deadline = now() + Math.max(0, Number(timeoutMs) || 0);
     while (now() <= deadline) {
-      const operation = await this.get(id);
+      const snapshot = await this.operationsRef.child(String(id)).get();
+      const operation = normalizeOperation(snapshot.val());
       if (!operation || TERMINAL_STATUSES.has(operation.status)) return operation;
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
-    return this.get(id);
+
+    const snapshot = await this.operationsRef.child(String(id)).get();
+    return normalizeOperation(snapshot.val());
   }
 
   async releaseLock(resourceKey, operationId, serverId) {
