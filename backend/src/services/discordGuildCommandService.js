@@ -202,6 +202,7 @@ export class DiscordGuildCommandService {
     warningService,
     ticketService,
     gameBridgeService,
+    gamePresenceService,
     communityOperationStore,
     rewardService,
     channelLockService,
@@ -215,6 +216,7 @@ export class DiscordGuildCommandService {
     this.warningService = warningService;
     this.ticketService = ticketService;
     this.gameBridgeService = gameBridgeService;
+    this.gamePresenceService = gamePresenceService;
     this.communityOperationStore = communityOperationStore;
     this.rewardService = rewardService;
     this.channelLockService = channelLockService;
@@ -849,11 +851,17 @@ export class DiscordGuildCommandService {
       createdByDiscordId: interaction.user.id
     });
 
-    const latest = await this.communityOperationStore.waitForTerminal(operation.id, 4_500);
+    const latest = await this.communityOperationStore.waitForTerminal(operation.id, 6_000);
     const current = latest ?? operation;
     const status = communityOperationStatusLabel(current.status);
+    const bridgeServers = this.gamePresenceService?.listBridgeServers
+      ? await this.gamePresenceService.listBridgeServers().catch(() => [])
+      : [];
+    const connectedServerCount = bridgeServers.length;
     const description = current.status === "pending"
-      ? "A operação foi salva no Firebase e será executada automaticamente assim que qualquer servidor do jogo estiver disponível."
+      ? connectedServerCount > 0
+        ? `A operação está persistida e há **${connectedServerCount} servidor(es)** conectado(s) ao bridge. Ela continuará sendo tentada automaticamente; use \`/community-queue servers\` para conferir a conexão.`
+        : "A operação foi salva no Firebase, mas nenhum servidor Roblox está enviando heartbeat para o bridge agora. Ela será executada automaticamente quando um servidor conectar."
       : current.status === "processing"
         ? "Um servidor do jogo já recebeu a operação e está processando agora."
         : current.status === "completed"
@@ -867,6 +875,7 @@ export class DiscordGuildCommandService {
         { name: "Roblox UserId", value: `\`${targetRobloxUserId}\``, inline: true },
         { name: "Comunidade", value: communityName, inline: true },
         { name: "Status", value: `**${status}**`, inline: true },
+        { name: "Bridge", value: connectedServerCount > 0 ? `**${connectedServerCount}** servidor(es) conectado(s)` : "Nenhum heartbeat ativo", inline: true },
         { name: "Operação", value: `\`${current.id}\``, inline: false }
       )
       .setTimestamp();
@@ -950,6 +959,33 @@ export class DiscordGuildCommandService {
           this.client,
           "Fila de comunidades",
           lines.length ? lines.join("\n") : "Nenhuma operação encontrada para este filtro."
+        ).setTimestamp()]
+      });
+      return;
+    }
+
+    if (subcommand === "servers") {
+      if (!this.gamePresenceService?.listBridgeServers) {
+        throw new Error("O diagnóstico de servidores do bridge não está disponível.");
+      }
+
+      const servers = await this.gamePresenceService.listBridgeServers();
+      const lines = servers.slice(0, 20).map((server) => {
+        const ageSeconds = Math.max(0, Math.floor(Number(server.bridgeAgeMs ?? 0) / 1000));
+        const players = Number(server.bridgePlayerCount ?? server.playerCount ?? 0);
+        const version = String(server.bridgeVersion ?? "legacy");
+        const jobId = String(server.serverId ?? "unknown");
+        const shortId = jobId.length > 36 ? `${jobId.slice(0, 33)}...` : jobId;
+        return `• **Place ${Number(server.placeId ?? 0)}** • ${players} jogador(es) • bridge \`${version}\` • ${ageSeconds}s atrás\n  \`${shortId}\``;
+      });
+
+      await interaction.editReply({
+        embeds: [baseEmbed(
+          this.client,
+          "Servidores conectados ao bridge",
+          lines.length
+            ? lines.join("\n")
+            : "Nenhum servidor Roblox enviou heartbeat válido nos últimos 20 segundos. Verifique o Output do servidor por `[GameSettings][Bridge]`."
         ).setTimestamp()]
       });
       return;
