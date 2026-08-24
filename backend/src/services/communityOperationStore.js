@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 
 const ROOT_PATH = "voxel/v1/communityOperations";
 const CLAIM_TTL_MS = 45_000;
-const CLAIM_CANDIDATE_LIMIT = 30;
+const CLAIM_CANDIDATE_LIMIT = 100;
 const RECENT_SCAN_LIMIT = 100;
 const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
 const ALLOWED_TYPES = new Set([
@@ -106,68 +106,81 @@ export class CommunityOperationStore {
     });
     candidates.sort((a, b) => a.createdAt - b.createdAt);
 
+    let candidateErrors = 0;
+    let lastCandidateError = null;
+
     for (const candidate of candidates) {
-      const operationRef = this.operationsRef.child(candidate.id);
-      const snapshot = await operationRef.get();
-      const operation = normalizeOperation(snapshot.val());
+      try {
+        const operationRef = this.operationsRef.child(candidate.id);
+        const snapshot = await operationRef.get();
+        const operation = normalizeOperation(snapshot.val());
 
-      if (!operation || TERMINAL_STATUSES.has(operation.status)) {
-        await this.pendingRef.child(candidate.id).remove().catch(() => {});
-        continue;
-      }
+        if (!operation || TERMINAL_STATUSES.has(operation.status)) {
+          await this.pendingRef.child(candidate.id).remove().catch(() => {});
+          continue;
+        }
 
-      const resourceKey = operation.resourceKey || operationResourceKey(operation.payload);
-      const lockRef = this.locksRef.child(resourceKey);
-      const lock = await lockRef.transaction((current) => {
-        const currentExpiresAt = Number(current?.expiresAt ?? 0);
-        if (current?.operationId && currentExpiresAt > timestamp) return;
+        const resourceKey = operation.resourceKey || operationResourceKey(operation.payload);
+        const lockRef = this.locksRef.child(resourceKey);
+        const lock = await lockRef.transaction((current) => {
+          const currentExpiresAt = Number(current?.expiresAt ?? 0);
+          if (current?.operationId && currentExpiresAt > timestamp) return;
+
+          return {
+            operationId: candidate.id,
+            serverId,
+            expiresAt: timestamp + CLAIM_TTL_MS,
+            claimedAt: timestamp
+          };
+        });
+
+        if (!lock.committed) continue;
+
+        const claim = await operationRef.transaction((current) => {
+          if (!current || typeof current !== "object") return;
+          if (TERMINAL_STATUSES.has(String(current.status ?? ""))) return;
+
+          const activeClaim = String(current.status ?? "") === "processing"
+            && Number(current.claimExpiresAt ?? 0) > timestamp;
+          if (activeClaim) return;
+
+          return {
+            ...current,
+            resourceKey,
+            status: "processing",
+            claimServerId: serverId,
+            claimExpiresAt: timestamp + CLAIM_TTL_MS,
+            lastServerId: serverId,
+            attempts: Math.max(0, Number(current.attempts ?? 0)) + 1,
+            updatedAt: timestamp
+          };
+        });
+
+        if (!claim.committed) {
+          await this.releaseLock(resourceKey, candidate.id, serverId);
+          continue;
+        }
+
+        const claimed = normalizeOperation(claim.snapshot.val());
+        if (!claimed) {
+          await this.releaseLock(resourceKey, candidate.id, serverId);
+          continue;
+        }
 
         return {
-          operationId: candidate.id,
-          serverId,
-          expiresAt: timestamp + CLAIM_TTL_MS,
-          claimedAt: timestamp
+          id: claimed.id,
+          type: claimed.type,
+          payload: clone(claimed.payload)
         };
-      });
-
-      if (!lock.committed) continue;
-
-      const claim = await operationRef.transaction((current) => {
-        if (!current || typeof current !== "object") return;
-        if (TERMINAL_STATUSES.has(String(current.status ?? ""))) return;
-
-        const activeClaim = String(current.status ?? "") === "processing"
-          && Number(current.claimExpiresAt ?? 0) > timestamp;
-        if (activeClaim) return;
-
-        return {
-          ...current,
-          resourceKey,
-          status: "processing",
-          claimServerId: serverId,
-          claimExpiresAt: timestamp + CLAIM_TTL_MS,
-          lastServerId: serverId,
-          attempts: Math.max(0, Number(current.attempts ?? 0)) + 1,
-          updatedAt: timestamp
-        };
-      });
-
-      if (!claim.committed) {
-        await this.releaseLock(resourceKey, candidate.id, serverId);
-        continue;
+      } catch (error) {
+        candidateErrors += 1;
+        lastCandidateError = error;
+        console.error(`[community-queue] Failed to inspect/claim ${candidate.id}:`, error);
       }
+    }
 
-      const claimed = normalizeOperation(claim.snapshot.val());
-      if (!claimed) {
-        await this.releaseLock(resourceKey, candidate.id, serverId);
-        continue;
-      }
-
-      return {
-        id: claimed.id,
-        type: claimed.type,
-        payload: clone(claimed.payload)
-      };
+    if (candidates.length > 0 && candidateErrors === candidates.length && lastCandidateError) {
+      throw lastCandidateError;
     }
 
     return null;
