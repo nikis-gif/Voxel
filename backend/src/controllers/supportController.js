@@ -1,6 +1,24 @@
 import { randomUUID } from "node:crypto";
 import { isSupportedImageBuffer, normalizeMultiline, normalizeSingleLine } from "../utils/text.js";
 
+const SUPPORT_TYPES = new Set(["technical", "report", "other"]);
+const LEGACY_TYPE_PREFIX = /^\[\s*(Suporte técnico|Denúncia|Dúvida ou outro assunto)\s*\]\s*/iu;
+
+function normalizeSupportType(value, message) {
+  const raw = String(value ?? "").normalize("NFKC").trim().toLowerCase();
+  if (SUPPORT_TYPES.has(raw)) return raw;
+  if (raw === "denúncia" || raw === "denuncia") return "report";
+
+  const legacyType = String(message ?? "").match(LEGACY_TYPE_PREFIX)?.[1]?.toLowerCase();
+  if (legacyType === "denúncia" || legacyType === "denuncia") return "report";
+  if (legacyType === "dúvida ou outro assunto" || legacyType === "duvida ou outro assunto") return "other";
+  return "technical";
+}
+
+function removeLegacyTypePrefix(message) {
+  return String(message ?? "").replace(LEGACY_TYPE_PREFIX, "").trim();
+}
+
 export function createSupportController({
   discordSupportService,
   supportSafetyService,
@@ -17,7 +35,9 @@ export function createSupportController({
       }
 
       const sender = normalizeSingleLine(req.body.sender, 80);
-      const message = normalizeMultiline(req.body.message, 1800);
+      const rawMessage = normalizeMultiline(req.body.message, 1800);
+      const type = normalizeSupportType(req.body.type, rawMessage);
+      const message = normalizeMultiline(removeLegacyTypePrefix(rawMessage), 1800);
       const files = Array.isArray(req.files) ? req.files : [];
 
       if (!sender) {
@@ -36,7 +56,7 @@ export function createSupportController({
         return;
       }
 
-      const ticketPayload = { sender, message, files };
+      const ticketPayload = { type, sender, message, files };
       abuseReservation = await supportAbuseService?.reserve(ticketPayload) ?? null;
 
       await supportSafetyService?.assertSupportAllowed(ticketPayload);
@@ -44,6 +64,7 @@ export function createSupportController({
       const ticketId = randomUUID().split("-")[0].toUpperCase();
       const result = await discordSupportService.sendTicket({
         id: ticketId,
+        type,
         sender,
         message,
         files,
