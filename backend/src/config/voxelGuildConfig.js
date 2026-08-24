@@ -5,6 +5,7 @@ export const VOXEL_GUILD_CONFIG = Object.freeze({
   logChannelId: "1540406288847085648",
   trainingReportChannelId: "1540407767569928212",
   recruitmentReportChannelId: "1540407818258219088",
+  supportReportChannelId: "1541454959961444564",
   trainingAnnouncementChannelId: "1540412778332954746",
   examAnnouncementChannelId: "1540412870314037309",
 
