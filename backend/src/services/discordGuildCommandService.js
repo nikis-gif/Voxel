@@ -28,6 +28,9 @@ import { unbanDiscordCommand, UNBAN_DISCORD_COMMAND_NAME } from "../commands/mod
 import { unbanGameCommand, UNBAN_GAME_COMMAND_NAME } from "../commands/moderation/unbanGameCommand.js";
 import { warnCommand, WARN_COMMAND_NAME } from "../commands/moderation/warnCommand.js";
 import { changeRankGameCommand, CHANGE_RANK_GAME_COMMAND_NAME } from "../commands/moderation/changeRankGameCommand.js";
+import { communityAddGameCommand, COMMUNITY_ADD_GAME_COMMAND_NAME } from "../commands/moderation/communityAddGameCommand.js";
+import { communityRemoveGameCommand, COMMUNITY_REMOVE_GAME_COMMAND_NAME } from "../commands/moderation/communityRemoveGameCommand.js";
+import { communityQueueCommand, COMMUNITY_QUEUE_COMMAND_NAME } from "../commands/moderation/communityQueueCommand.js";
 import { messageCommand, MESSAGE_COMMAND_NAME } from "../commands/moderation/messageCommand.js";
 import { lockChatCommand, LOCK_CHAT_COMMAND_NAME } from "../commands/security/lockChatCommand.js";
 import { unlockChatCommand, UNLOCK_CHAT_COMMAND_NAME } from "../commands/security/unlockChatCommand.js";
@@ -64,6 +67,9 @@ const COMMAND_BUILDERS = Object.freeze([
   banlistGameCommand,
   banlistDiscordCommand,
   changeRankGameCommand,
+  communityAddGameCommand,
+  communityRemoveGameCommand,
+  communityQueueCommand,
   messageCommand,
   lockChatCommand,
   unlockChatCommand
@@ -125,6 +131,39 @@ function parseSnowflake(value) {
   return /^\d{17,20}$/.test(text) ? text : null;
 }
 
+function parseRobloxUserId(value) {
+  const text = String(value ?? "").trim();
+  if (!/^\d{1,15}$/.test(text)) {
+    throw new Error("Informe um UserId numérico válido do Roblox.");
+  }
+
+  const userId = Number(text);
+  if (!Number.isSafeInteger(userId) || userId <= 0) {
+    throw new Error("Informe um UserId numérico válido do Roblox.");
+  }
+  return userId;
+}
+
+function communityOperationStatusLabel(status) {
+  switch (status) {
+    case "pending": return "Aguardando servidor";
+    case "processing": return "Processando no jogo";
+    case "completed": return "Concluída";
+    case "failed": return "Falhou";
+    case "cancelled": return "Cancelada";
+    default: return String(status || "Desconhecido");
+  }
+}
+
+function communityOperationTypeLabel(type) {
+  switch (type) {
+    case "community-add-member": return "Adicionar membro";
+    case "community-remove-member": return "Remover membro";
+    case "community-set-rank": return "Alterar rank";
+    default: return String(type || "Operação");
+  }
+}
+
 function paginationRow(kind, page, totalPages, userId) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -163,6 +202,7 @@ export class DiscordGuildCommandService {
     warningService,
     ticketService,
     gameBridgeService,
+    communityOperationStore,
     rewardService,
     channelLockService,
     roleIds = {},
@@ -175,6 +215,7 @@ export class DiscordGuildCommandService {
     this.warningService = warningService;
     this.ticketService = ticketService;
     this.gameBridgeService = gameBridgeService;
+    this.communityOperationStore = communityOperationStore;
     this.rewardService = rewardService;
     this.channelLockService = channelLockService;
     this.roleIds = roleIds;
@@ -323,6 +364,15 @@ export class DiscordGuildCommandService {
         break;
       case CHANGE_RANK_GAME_COMMAND_NAME:
         await this.handleChangeRankGame(interaction);
+        break;
+      case COMMUNITY_ADD_GAME_COMMAND_NAME:
+        await this.handleCommunityAddGame(interaction);
+        break;
+      case COMMUNITY_REMOVE_GAME_COMMAND_NAME:
+        await this.handleCommunityRemoveGame(interaction);
+        break;
+      case COMMUNITY_QUEUE_COMMAND_NAME:
+        await this.handleCommunityQueue(interaction);
         break;
       case MESSAGE_COMMAND_NAME:
         await this.handleMessage(interaction);
@@ -563,6 +613,7 @@ export class DiscordGuildCommandService {
   }
 
   async handleSearchCommunity(interaction) {
+    this.assertOwner(interaction);
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const name = interaction.options.getString("nome", true).trim();
     const data = await this.gameBridgeService.request("search-community", { name });
@@ -775,28 +826,192 @@ export class DiscordGuildCommandService {
     });
   }
 
-  async handleChangeRankGame(interaction) {
-    assertAdministrator(interaction);
-    const target = interaction.options.getUser("usuario", true);
-    const link = (await this.verificationService.getLinkedProfile(target.id))?.link;
-    if (!link) throw new Error("O usuário selecionado ainda não está verificado no Voxel.");
+  async enqueueCommunityOperation(interaction, {
+    type,
+    title,
+    targetRobloxUserId,
+    communityName,
+    rank = null
+  }) {
+    if (!this.communityOperationStore) {
+      throw new Error("A fila persistente de comunidades não está disponível.");
+    }
 
-    const communityName = interaction.options.getString("comunidade", true).trim();
-    const rank = Number.parseInt(interaction.options.getString("rank", true), 10);
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const result = await this.gameBridgeService.request("change-rank", {
-      communityName,
-      targetRobloxUserId: link.robloxUserId,
-      rank,
-      moderatorDiscordId: interaction.user.id
+    const operation = await this.communityOperationStore.enqueue({
+      type,
+      payload: {
+        communityName,
+        targetRobloxUserId,
+        ...(Number.isInteger(rank) ? { rank } : {}),
+        moderatorDiscordId: interaction.user.id
+      },
+      createdByDiscordId: interaction.user.id
     });
 
-    await interaction.editReply({ embeds: [baseEmbed(this.client, "Rank atualizado no jogo")
+    const latest = await this.communityOperationStore.waitForTerminal(operation.id, 4_500);
+    const current = latest ?? operation;
+    const status = communityOperationStatusLabel(current.status);
+    const description = current.status === "pending"
+      ? "A operação foi salva no Firebase e será executada automaticamente assim que qualquer servidor do jogo estiver disponível."
+      : current.status === "processing"
+        ? "Um servidor do jogo já recebeu a operação e está processando agora."
+        : current.status === "completed"
+          ? "A operação foi aplicada pelo servidor do jogo."
+          : current.status === "failed"
+            ? "O servidor recebeu a operação, mas ela falhou. Você pode corrigir a causa e usar `/community-queue retry`."
+            : "A operação não está mais ativa.";
+
+    const embed = baseEmbed(this.client, title, description)
       .addFields(
-        { name: "Jogador", value: `${target.username}\nRoblox \`${link.robloxUserId}\``, inline: true },
-        { name: "Comunidade", value: result.communityName || communityName, inline: true },
-        { name: "Novo cargo", value: result.roleName || `Rank ${rank}`, inline: false }
-      ).setTimestamp()] });
+        { name: "Roblox UserId", value: `\`${targetRobloxUserId}\``, inline: true },
+        { name: "Comunidade", value: communityName, inline: true },
+        { name: "Status", value: `**${status}**`, inline: true },
+        { name: "Operação", value: `\`${current.id}\``, inline: false }
+      )
+      .setTimestamp();
+
+    if (Number.isInteger(rank)) {
+      embed.addFields({ name: "Rank solicitado", value: `\`${rank}\``, inline: true });
+    }
+    if (current.result?.roleName) {
+      embed.addFields({ name: "Cargo aplicado", value: String(current.result.roleName), inline: true });
+    }
+    if (current.error) {
+      embed.addFields({ name: "Erro", value: String(current.error).slice(0, 1000), inline: false });
+    }
+
+    await interaction.editReply({ embeds: [embed] });
+  }
+
+  async handleChangeRankGame(interaction) {
+    this.assertOwner(interaction);
+    const targetRobloxUserId = parseRobloxUserId(interaction.options.getString("user-id", true));
+    const communityName = interaction.options.getString("comunidade", true).trim();
+    const rank = Number.parseInt(interaction.options.getString("rank", true), 10);
+
+    await this.enqueueCommunityOperation(interaction, {
+      type: "community-set-rank",
+      title: "Alteração de rank",
+      targetRobloxUserId,
+      communityName,
+      rank
+    });
+  }
+
+  async handleCommunityAddGame(interaction) {
+    this.assertOwner(interaction);
+    const targetRobloxUserId = parseRobloxUserId(interaction.options.getString("user-id", true));
+    const communityName = interaction.options.getString("comunidade", true).trim();
+    const rank = Number.parseInt(interaction.options.getString("rank", true), 10);
+
+    await this.enqueueCommunityOperation(interaction, {
+      type: "community-add-member",
+      title: "Entrada na comunidade",
+      targetRobloxUserId,
+      communityName,
+      rank
+    });
+  }
+
+  async handleCommunityRemoveGame(interaction) {
+    this.assertOwner(interaction);
+    const targetRobloxUserId = parseRobloxUserId(interaction.options.getString("user-id", true));
+    const communityName = interaction.options.getString("comunidade", true).trim();
+
+    await this.enqueueCommunityOperation(interaction, {
+      type: "community-remove-member",
+      title: "Remoção da comunidade",
+      targetRobloxUserId,
+      communityName
+    });
+  }
+
+  async handleCommunityQueue(interaction) {
+    this.assertOwner(interaction);
+    if (!this.communityOperationStore) {
+      throw new Error("A fila persistente de comunidades não está disponível.");
+    }
+
+    const subcommand = interaction.options.getSubcommand();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    if (subcommand === "list") {
+      const status = interaction.options.getString("status") ?? "active";
+      const operations = await this.communityOperationStore.list({ status, limit: 20 });
+      const lines = operations.map((operation) => {
+        const payload = operation.payload ?? {};
+        const rank = Number.isInteger(Number(payload.rank)) ? ` • rank ${Number(payload.rank)}` : "";
+        return `• **${communityOperationStatusLabel(operation.status)}** • ${communityOperationTypeLabel(operation.type)}\n  \`${operation.id}\` • Roblox \`${payload.targetRobloxUserId ?? "?"}\` • ${payload.communityName ?? "Comunidade"}${rank}`;
+      });
+
+      await interaction.editReply({
+        embeds: [baseEmbed(
+          this.client,
+          "Fila de comunidades",
+          lines.length ? lines.join("\n") : "Nenhuma operação encontrada para este filtro."
+        ).setTimestamp()]
+      });
+      return;
+    }
+
+    const operationId = interaction.options.getString("id", true).trim();
+    if (subcommand === "status") {
+      const operation = await this.communityOperationStore.get(operationId);
+      if (!operation) throw new Error("Operação não encontrada.");
+
+      const payload = operation.payload ?? {};
+      const embed = baseEmbed(this.client, "Operação da comunidade")
+        .addFields(
+          { name: "ID", value: `\`${operation.id}\``, inline: false },
+          { name: "Tipo", value: communityOperationTypeLabel(operation.type), inline: true },
+          { name: "Status", value: communityOperationStatusLabel(operation.status), inline: true },
+          { name: "Tentativas", value: String(operation.attempts ?? 0), inline: true },
+          { name: "Roblox UserId", value: `\`${payload.targetRobloxUserId ?? "?"}\``, inline: true },
+          { name: "Comunidade", value: String(payload.communityName ?? "N/A"), inline: true },
+          { name: "Criada", value: discordTimestamp(operation.createdAt), inline: true }
+        )
+        .setTimestamp();
+
+      if (payload.rank != null) embed.addFields({ name: "Rank", value: `\`${payload.rank}\``, inline: true });
+      if (operation.lastServerId) embed.addFields({ name: "Último servidor", value: `\`${operation.lastServerId}\``, inline: false });
+      if (operation.result?.roleName) embed.addFields({ name: "Cargo aplicado", value: String(operation.result.roleName), inline: true });
+      if (operation.error) embed.addFields({ name: "Erro", value: String(operation.error).slice(0, 1000), inline: false });
+
+      await interaction.editReply({ embeds: [embed] });
+      return;
+    }
+
+    if (subcommand === "cancel") {
+      const operation = await this.communityOperationStore.cancel(operationId, interaction.user.id);
+      if (!operation) {
+        throw new Error("Só é possível cancelar uma operação que ainda está aguardando um servidor.");
+      }
+
+      await interaction.editReply({
+        embeds: [baseEmbed(
+          this.client,
+          "Operação cancelada",
+          `A operação \`${operation.id}\` foi removida da fila antes de ser executada.`
+        ).setTimestamp()]
+      });
+      return;
+    }
+
+    if (subcommand === "retry") {
+      const operation = await this.communityOperationStore.retry(operationId, interaction.user.id);
+      if (!operation) {
+        throw new Error("Só é possível repetir operações com falha ou canceladas.");
+      }
+
+      await interaction.editReply({
+        embeds: [baseEmbed(
+          this.client,
+          "Operação recolocada na fila",
+          `A operação \`${operation.id}\` será executada quando um servidor do jogo estiver disponível.`
+        ).setTimestamp()]
+      });
+    }
   }
 
   async handleMessage(interaction) {
