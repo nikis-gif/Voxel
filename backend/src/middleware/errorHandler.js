@@ -9,6 +9,8 @@ export function errorHandler(error, _req, res, _next) {
     const messages = {
       LIMIT_FILE_SIZE: "Uma das imagens ultrapassa o limite de 5 MB.",
       LIMIT_FILE_COUNT: "Você pode enviar no máximo 4 imagens.",
+      LIMIT_FIELD_COUNT: "O formulário enviou campos demais. Atualize a página e tente novamente.",
+      LIMIT_FIELD_VALUE: "Um dos campos enviados ultrapassa o limite permitido.",
       LIMIT_UNEXPECTED_FILE: "O campo de anexo enviado é inválido."
     };
 
