@@ -8,8 +8,9 @@ function now() {
 }
 
 export class GameBridgeService {
-  constructor() {
+  constructor({ persistentStore = null } = {}) {
     this.actions = new Map();
+    this.persistentStore = persistentStore;
   }
 
   request(type, payload, timeoutMs = DEFAULT_TIMEOUT_MS) {
@@ -42,13 +43,23 @@ export class GameBridgeService {
     });
   }
 
-  poll(serverId, onlineUserIds = []) {
+  async poll(serverId, onlineUserIds = []) {
+    if (this.persistentStore) {
+      const persistentAction = await this.persistentStore.claimNext(serverId);
+      if (persistentAction) return persistentAction;
+    }
+
     const timestamp = now();
-    const online = new Set((onlineUserIds ?? []).map((value) => Number(value)).filter((value) => Number.isSafeInteger(value) && value > 0));
+    const online = new Set(
+      (onlineUserIds ?? [])
+        .map((value) => Number(value))
+        .filter((value) => Number.isSafeInteger(value) && value > 0)
+    );
 
     for (const action of this.actions.values()) {
       if (timestamp - action.createdAt > DEFAULT_TIMEOUT_MS + CLAIM_TTL_MS) continue;
       if (action.claimServerId && action.claimExpiresAt > timestamp) continue;
+
       const targetUserId = Number(action.payload?.targetRobloxUserId ?? 0);
       if (targetUserId > 0 && !online.has(targetUserId)) continue;
 
@@ -64,21 +75,36 @@ export class GameBridgeService {
     return null;
   }
 
-  complete({ serverId, actionId, success, data = null, error = null }) {
+  async complete({ serverId, actionId, success, data = null, error = null }) {
     const action = this.actions.get(actionId);
-    if (!action || action.claimServerId !== serverId) return false;
+    if (action) {
+      if (action.claimServerId !== serverId) return false;
 
-    this.actions.delete(actionId);
-    clearTimeout(action.timer);
+      this.actions.delete(actionId);
+      clearTimeout(action.timer);
 
-    if (success) {
-      action.resolve(data);
+      if (success) {
+        action.resolve(data);
+        return true;
+      }
+
+      const resultError = new Error(
+        typeof error === "string" && error.trim()
+          ? error.trim()
+          : "O servidor do jogo recusou a ação."
+      );
+      resultError.code = "GAME_BRIDGE_ACTION_FAILED";
+      action.reject(resultError);
       return true;
     }
 
-    const resultError = new Error(typeof error === "string" && error.trim() ? error.trim() : "O servidor do jogo recusou a ação.");
-    resultError.code = "GAME_BRIDGE_ACTION_FAILED";
-    action.reject(resultError);
-    return true;
+    if (!this.persistentStore) return false;
+    return this.persistentStore.complete({
+      serverId,
+      actionId,
+      success,
+      data,
+      error
+    });
   }
 }
