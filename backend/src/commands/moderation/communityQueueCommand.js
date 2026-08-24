@@ -32,6 +32,11 @@ export const communityQueueCommand = new SlashCommandBuilder()
   )
   .addSubcommand((subcommand) =>
     subcommand
+      .setName("servers")
+      .setDescription("Mostra os servidores Roblox conectados ao bridge do Voxel.")
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
       .setName("status")
       .setDescription("Mostra os detalhes de uma operação.")
       .addStringOption((option) =>
