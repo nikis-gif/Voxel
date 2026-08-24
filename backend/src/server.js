@@ -57,7 +57,13 @@ let staffReportService = null;
 let operationalAnnouncementService = null;
 
 registerDiscordDmCommands(discordClient, env.supportOwnerId);
-const discordSupportService = new DiscordSupportService(discordClient, env.supportOwnerId);
+const discordSupportService = new DiscordSupportService({
+  client: discordClient,
+  ownerId: env.supportOwnerId,
+  database: firebase.database,
+  roleIds: env.verification.roleIds
+});
+discordSupportService.init();
 
 console.log("[safety] Local support safeguards enabled. External AI moderation is disabled.");
 console.log(`[firebase] Realtime Database connected: ${firebase.projectId}.`);
@@ -93,7 +99,8 @@ if (env.verification.enabled) {
 
   const guildPolicyService = new GuildPolicyService({
     client: discordClient,
-    guildId: env.verification.guildId
+    guildId: env.verification.guildId,
+    roleIds: env.verification.roleIds
   });
   guildPolicyService.init();
 
