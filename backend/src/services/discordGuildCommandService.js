@@ -991,6 +991,38 @@ export class DiscordGuildCommandService {
       return;
     }
 
+    if (subcommand === "diagnostics") {
+      const [queue, servers] = await Promise.all([
+        this.communityOperationStore.diagnostics(),
+        this.gamePresenceService?.listBridgeServers?.() ?? []
+      ]);
+
+      const lastClaim = queue.lastClaimAt
+        ? discordTimestamp(queue.lastClaimAt)
+        : "Nenhuma operação entregue desde o início deste processo.";
+      const lastError = queue.lastError
+        ? `${queue.lastError}\n${queue.lastErrorAt ? `Registrado ${discordTimestamp(queue.lastErrorAt)}` : ""}`.trim()
+        : "Nenhum erro interno registrado.";
+
+      await interaction.editReply({
+        embeds: [baseEmbed(
+          this.client,
+          "Diagnóstico da fila de comunidades",
+          servers.length > 0
+            ? `**${servers.length}** servidor(es) conectado(s) ao bridge neste momento.`
+            : "Nenhum servidor está conectado ao bridge neste momento."
+        ).addFields(
+          { name: "Versão da fila", value: `v${queue.queueVersion}`, inline: true },
+          { name: "Pendentes", value: String(queue.pendingCount), inline: true },
+          { name: "Índice recente", value: String(queue.recentIndexCount), inline: true },
+          { name: "Última entrega", value: lastClaim, inline: false },
+          { name: "Última operação entregue", value: queue.lastClaimedOperationId ? `\`${queue.lastClaimedOperationId}\`` : "Nenhuma", inline: false },
+          { name: "Último erro da fila", value: lastError.slice(0, 1000), inline: false }
+        ).setTimestamp()]
+      });
+      return;
+    }
+
     const operationId = interaction.options.getString("id", true).trim();
     if (subcommand === "status") {
       const operation = await this.communityOperationStore.get(operationId);
