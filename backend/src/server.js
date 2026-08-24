@@ -46,6 +46,9 @@ const verificationCodeStore = new VerificationCodeStore({ database: firebase.dat
 const supportSafetyService = new SupportSafetyService();
 const supportAbuseService = new SupportAbuseService({ database: firebase.database });
 const communityOperationStore = new CommunityOperationStore({ database: firebase.database });
+await communityOperationStore.init()
+  .then(() => console.log("[community-queue] Persistent queue v2 ready."))
+  .catch((error) => console.error("[community-queue] Initial migration failed; lazy retry remains enabled:", error));
 const gameBridgeService = new GameBridgeService({ persistentStore: communityOperationStore });
 const gamePresenceService = new GamePresenceService(firebase.database);
 const engagementStore = new CommunityEngagementStore(firebase.database);
@@ -242,3 +245,4 @@ function shutdown(signal) {
 
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
+
