@@ -37,6 +37,11 @@ export const communityQueueCommand = new SlashCommandBuilder()
   )
   .addSubcommand((subcommand) =>
     subcommand
+      .setName("diagnostics")
+      .setDescription("Mostra o estado interno da fila e do bridge.")
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
       .setName("status")
       .setDescription("Mostra os detalhes de uma operação.")
       .addStringOption((option) =>
