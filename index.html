@@ -1804,14 +1804,14 @@ p{margin:0}
       <div class="vx-support-top">
         <span class="vx-mini">Suporte e denúncias</span>
         <h1>Como podemos ajudar?</h1>
-        <p>Use este canal para relatar erros, falhas, problemas de acesso ou conduta inadequada. Em denúncias, envie o máximo de contexto possível para que a equipe consiga analisar o caso corretamente.</p>
+        <p>Suporte técnico é enviado de forma privada ao owner. Denúncias e outros assuntos seguem para o canal público da equipe, onde o status pode ser atualizado e enviado diretamente para sua DM.</p>
       </div>
       <div class="vx-support-box">
         <div class="vx-support-bot">
           <div class="vx-support-avatar"><span class="vx-mark"><i></i></span></div>
           <div>
             <div class="vx-support-botname">Voxel Support <span>app</span></div>
-            <p>Para suporte técnico, explique o que aconteceu e como reproduzir. Para denúncias, informe quem está sendo denunciado, o motivo, quando ocorreu e anexe provas como prints, imagens ou links de mensagens quando disponíveis.</p>
+            <p>Para suporte técnico, explique o erro e como reproduzir. Em denúncias e outros assuntos, informe também seu @username exato do Discord para que o Voxel consiga enviar as atualizações da equipe por mensagem privada.</p>
           </div>
         </div>
         <div class="vx-form">
@@ -1827,6 +1827,11 @@ p{margin:0}
           <label class="vx-field">
             <span class="vx-fieldlabel">Seu nome ou usuário <small>Obrigatório</small></span>
             <input id="vx-sup-usuario" class="vx-input" type="text" maxlength="60" placeholder="ex.: [CB] Nome do militar" autocomplete="off">
+          </label>
+          <label class="vx-field" id="vx-sup-discord-wrap" hidden>
+            <span class="vx-fieldlabel">Seu @username do Discord <small>Obrigatório</small></span>
+            <input id="vx-sup-discord" class="vx-input" type="text" maxlength="40" placeholder="ex.: nikisorix" autocomplete="username">
+            <span class="vx-context">Use o username atual da conta, o mesmo usado para adicionar amigos. Não use apenas o nome de exibição.</span>
           </label>
           <label class="vx-field">
             <span class="vx-fieldlabel">Relato <small><span id="vx-sup-contador">0</span> / 1800</small></span>
@@ -3259,6 +3264,8 @@ p{margin:0}
   const vxTipo = $('#vx-sup-tipo');
   const vxContexto = $('#vx-sup-contexto');
   const vxUsuario = $('#vx-sup-usuario');
+  const vxDiscordWrap = $('#vx-sup-discord-wrap');
+  const vxDiscord = $('#vx-sup-discord');
   const vxProblema = $('#vx-sup-problema');
   const vxContador = $('#vx-sup-contador');
   const vxSolta = $('#vx-sup-solta');
@@ -3278,20 +3285,27 @@ p{margin:0}
     if (!vxTipo || !vxContexto || !vxProblema) return;
 
     const tipo = vxTipo.value;
+    const precisaDiscord = tipo !== 'Suporte técnico';
+
+    if (vxDiscordWrap) vxDiscordWrap.hidden = !precisaDiscord;
+    if (vxDiscord) {
+      vxDiscord.required = precisaDiscord;
+      if (!precisaDiscord) vxDiscord.value = '';
+    }
 
     if (tipo === 'Denúncia') {
-      vxContexto.textContent = 'Informe o usuário denunciado, motivo, data aproximada e provas. Prints e links de mensagens ajudam na análise.';
+      vxContexto.textContent = 'A denúncia será publicada no canal da equipe. Informe o usuário denunciado, motivo, data aproximada e provas.';
       vxProblema.placeholder = 'Quem está sendo denunciado, o que aconteceu, quando ocorreu e quais provas você possui.';
       return;
     }
 
     if (tipo === 'Dúvida ou outro assunto') {
-      vxContexto.textContent = 'Use esta opção quando o assunto não for uma falha técnica nem uma denúncia.';
+      vxContexto.textContent = 'A solicitação será publicada no canal da equipe e você receberá atualizações por DM.';
       vxProblema.placeholder = 'Explique sua dúvida ou assunto com o máximo de contexto necessário.';
       return;
     }
 
-    vxContexto.textContent = 'Erros, falhas, problemas de acesso ou comportamento inesperado.';
+    vxContexto.textContent = 'Erros e problemas técnicos são enviados de forma privada diretamente ao owner.';
     vxProblema.placeholder = 'O que aconteceu, quando ocorreu e qual resultado você esperava.';
   };
 
@@ -3324,6 +3338,8 @@ p{margin:0}
 
   vxEnviar?.addEventListener('click', async () => {
     if (!vxUsuario?.value.trim()) { definirEstadoVoxel('Informe seu nome ou usuário', 'error'); vxUsuario?.focus(); return; }
+    const precisaDiscord = vxTipo?.value !== 'Suporte técnico';
+    if (precisaDiscord && !vxDiscord?.value.trim()) { definirEstadoVoxel('Informe seu @username do Discord', 'error'); vxDiscord?.focus(); return; }
     if ((vxProblema?.value.trim().length || 0) < 20) { definirEstadoVoxel('Descreva o problema com mais contexto', 'error'); vxProblema?.focus(); return; }
     if (!SUPORTE_ENDPOINT) { definirEstadoVoxel('Endpoint de suporte não configurado', 'error'); return; }
 
@@ -3339,6 +3355,7 @@ p{margin:0}
 
       dados.append('type', tipoSolicitacao);
       dados.append('sender', vxUsuario.value.trim());
+      dados.append('discordUsername', precisaDiscord ? vxDiscord.value.trim() : '');
       dados.append('message', vxProblema.value.trim());
       dados.append('website', '');
       vxAnexos.forEach(file => dados.append('images', file));
@@ -3350,6 +3367,7 @@ p{margin:0}
       definirEstadoVoxel(`Solicitação ${resposta.ticketId || ''} registrada`.trim(), 'success');
       if (vxTipo) vxTipo.value = 'Suporte técnico';
       vxUsuario.value = '';
+      if (vxDiscord) vxDiscord.value = '';
       vxProblema.value = '';
       atualizarContextoVoxel();
       if (vxContador) vxContador.textContent = '0';
