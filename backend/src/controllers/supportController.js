@@ -38,10 +38,16 @@ export function createSupportController({
       const rawMessage = normalizeMultiline(req.body.message, 1800);
       const type = normalizeSupportType(req.body.type, rawMessage);
       const message = normalizeMultiline(removeLegacyTypePrefix(rawMessage), 1800);
+      const discordUsername = normalizeSingleLine(req.body.discordUsername, 40).replace(/^@/, "");
       const files = Array.isArray(req.files) ? req.files : [];
 
       if (!sender) {
         res.status(400).json({ error: "Informe seu nome ou usuário." });
+        return;
+      }
+
+      if (type !== "technical" && !discordUsername) {
+        res.status(400).json({ error: "Informe seu @username do Discord para receber o status da solicitação." });
         return;
       }
 
@@ -56,7 +62,7 @@ export function createSupportController({
         return;
       }
 
-      const ticketPayload = { type, sender, message, files };
+      const ticketPayload = { type, sender, discordUsername, message, files };
       abuseReservation = await supportAbuseService?.reserve(ticketPayload) ?? null;
 
       await supportSafetyService?.assertSupportAllowed(ticketPayload);
@@ -66,6 +72,7 @@ export function createSupportController({
         id: ticketId,
         type,
         sender,
+        discordUsername,
         message,
         files,
         createdAt: new Date()
