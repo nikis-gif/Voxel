@@ -184,6 +184,7 @@ if (env.verification.enabled) {
     warningService,
     ticketService,
     gameBridgeService,
+    gamePresenceService,
     communityOperationStore,
     rewardService,
     channelLockService,
