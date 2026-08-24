@@ -21,10 +21,11 @@ export function createGameBridgeController(gameBridgeService, gamePresenceServic
         }).catch((error) => console.error("[presence] Failed to record game heartbeat:", error));
       }
 
-      res.json({ success: true, data: gameBridgeService.poll(serverId, onlineUserIds) });
+      const action = await gameBridgeService.poll(serverId, onlineUserIds);
+      res.json({ success: true, data: action });
     },
 
-    result(req, res) {
+    async result(req, res) {
       const serverId = typeof req.body?.serverId === "string" ? req.body.serverId.trim() : "";
       const actionId = typeof req.body?.actionId === "string" ? req.body.actionId.trim() : "";
       const success = req.body?.success === true;
@@ -34,7 +35,7 @@ export function createGameBridgeController(gameBridgeService, gamePresenceServic
         return;
       }
 
-      const accepted = gameBridgeService.complete({
+      const accepted = await gameBridgeService.complete({
         serverId,
         actionId,
         success,
