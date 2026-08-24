@@ -12,16 +12,39 @@ export function createGameBridgeController(gameBridgeService, gamePresenceServic
       const onlineUserIds = Array.isArray(req.body?.onlineUserIds)
         ? req.body.onlineUserIds
         : players.map((player) => player?.userId);
+      const placeId = Number(req.body?.placeId ?? 0);
+      const bridgeVersion = typeof req.body?.bridgeVersion === "string"
+        ? req.body.bridgeVersion.trim().slice(0, 40)
+        : "legacy";
+
+      if (gamePresenceService) {
+        await gamePresenceService.recordBridgeHeartbeat({
+          serverId,
+          placeId,
+          bridgeVersion,
+          onlineUserIds
+        }).catch((error) => console.error("[bridge] Failed to record bridge heartbeat:", error));
+      }
+
       if (gamePresenceService && presence) {
         await gamePresenceService.recordHeartbeat({
           serverId,
-          placeId: Number(req.body?.placeId ?? 0),
+          placeId,
           maxPlayers: Number(presence.maxPlayers ?? 0),
           players
         }).catch((error) => console.error("[presence] Failed to record game heartbeat:", error));
       }
 
-      const action = await gameBridgeService.poll(serverId, onlineUserIds);
+      let action = null;
+      try {
+        action = await gameBridgeService.poll(serverId, onlineUserIds);
+      } catch (error) {
+        console.error(`[bridge] Queue poll failed for ${serverId}:`, error);
+        const bridgeError = new Error("O servidor conectou ao Voxel, mas a fila de comunidades não pôde ser consultada.");
+        bridgeError.statusCode = 503;
+        throw bridgeError;
+      }
+
       res.json({ success: true, data: action });
     },
 
