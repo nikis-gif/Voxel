@@ -11,6 +11,7 @@ import { DiscordGuildCommandService } from "./services/discordGuildCommandServic
 import { DiscordRoleSyncService } from "./services/discordRoleSyncService.js";
 import { DiscordSupportService } from "./services/discordSupportService.js";
 import { ChannelLockService } from "./services/channelLockService.js";
+import { CommunityOperationStore } from "./services/communityOperationStore.js";
 import { GuildSecurityService } from "./services/guildSecurityService.js";
 import { DiscordVerificationService } from "./services/discordVerificationService.js";
 import { GameBanService } from "./services/gameBanService.js";
@@ -44,7 +45,8 @@ const discordClient = createDiscordClient();
 const verificationCodeStore = new VerificationCodeStore({ database: firebase.database });
 const supportSafetyService = new SupportSafetyService();
 const supportAbuseService = new SupportAbuseService({ database: firebase.database });
-const gameBridgeService = new GameBridgeService();
+const communityOperationStore = new CommunityOperationStore({ database: firebase.database });
+const gameBridgeService = new GameBridgeService({ persistentStore: communityOperationStore });
 const gamePresenceService = new GamePresenceService(firebase.database);
 const engagementStore = new CommunityEngagementStore(firebase.database);
 const moderationStore = new ModerationStore(firebase.database);
@@ -182,6 +184,7 @@ if (env.verification.enabled) {
     warningService,
     ticketService,
     gameBridgeService,
+    communityOperationStore,
     rewardService,
     channelLockService,
     roleIds: env.verification.roleIds,
