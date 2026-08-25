@@ -1013,8 +1013,12 @@ export class DiscordGuildCommandService {
             : "Nenhum servidor está conectado ao bridge neste momento."
         ).addFields(
           { name: "Versão da fila", value: `v${queue.queueVersion}`, inline: true },
-          { name: "Pendentes", value: String(queue.pendingCount), inline: true },
+          { name: "Índice pendente", value: String(queue.pendingCount), inline: true },
+          { name: "Operações ativas", value: String(queue.activeOperationCount ?? queue.pendingCount), inline: true },
+          { name: "Órfãs do índice", value: String(queue.orphanedOperationCount ?? 0), inline: true },
+          { name: "Claims expirados", value: String(queue.staleProcessingCount ?? 0), inline: true },
           { name: "Índice recente", value: String(queue.recentIndexCount), inline: true },
+          { name: "Último reparo", value: queue.lastRepairScanAt ? `${discordTimestamp(queue.lastRepairScanAt)} • ${queue.lastRepairCount ?? 0} reparada(s)` : "Ainda não executado", inline: false },
           { name: "Última entrega", value: lastClaim, inline: false },
           { name: "Última operação entregue", value: queue.lastClaimedOperationId ? `\`${queue.lastClaimedOperationId}\`` : "Nenhuma", inline: false },
           { name: "Último erro da fila", value: lastError.slice(0, 1000), inline: false }
@@ -1405,3 +1409,4 @@ export class DiscordGuildCommandService {
     }
   }
 }
+
