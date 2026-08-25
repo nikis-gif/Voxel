@@ -11,8 +11,8 @@ export const supportUpload = multer({
   limits: {
     files: MAX_FILES,
     fileSize: MAX_FILE_SIZE,
-    // type, sender, discordUsername, message and honeypot website
-    fields: 5,
+    // Base support fields + revocation UserId/rank metadata.
+    fields: 7,
     fieldSize: 8 * 1024
   },
   fileFilter: (_req, file, callback) => {
