@@ -47,7 +47,7 @@ const supportSafetyService = new SupportSafetyService();
 const supportAbuseService = new SupportAbuseService({ database: firebase.database });
 const communityOperationStore = new CommunityOperationStore({ database: firebase.database });
 await communityOperationStore.init()
-  .then(() => console.log("[community-queue] Persistent queue v5 ready."))
+  .then(() => console.log("[community-queue] Persistent queue v6 ready."))
   .catch((error) => console.error("[community-queue] Initial migration failed; lazy retry remains enabled:", error));
 const gameBridgeService = new GameBridgeService();
 const gamePresenceService = new GamePresenceService(firebase.database);
@@ -246,3 +246,4 @@ function shutdown(signal) {
 
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
+
