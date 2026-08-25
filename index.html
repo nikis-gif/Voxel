@@ -1804,14 +1804,14 @@ p{margin:0}
       <div class="vx-support-top">
         <span class="vx-mini">Suporte e denúncias</span>
         <h1>Como podemos ajudar?</h1>
-        <p>Suporte técnico é enviado de forma privada ao owner. Denúncias e outros assuntos seguem para o canal público da equipe, onde o status pode ser atualizado e enviado diretamente para sua DM.</p>
+        <p>Suporte técnico é enviado de forma privada ao owner. Denúncias, revogações de patente e outros assuntos seguem para o canal público da equipe, onde o status pode ser atualizado e enviado diretamente para sua DM.</p>
       </div>
       <div class="vx-support-box">
         <div class="vx-support-bot">
           <div class="vx-support-avatar"><span class="vx-mark"><i></i></span></div>
           <div>
             <div class="vx-support-botname">Voxel Support <span>app</span></div>
-            <p>Para suporte técnico, explique o erro e como reproduzir. Em denúncias e outros assuntos, informe também seu @username exato do Discord para que o Voxel consiga enviar as atualizações da equipe por mensagem privada.</p>
+            <p>Para suporte técnico, explique o erro e como reproduzir. Em denúncias, revogações e outros assuntos, informe também seu @username exato do Discord para que o Voxel consiga enviar as atualizações da equipe por mensagem privada.</p>
           </div>
         </div>
         <div class="vx-form">
@@ -1820,6 +1820,7 @@ p{margin:0}
             <select id="vx-sup-tipo" class="vx-select">
               <option value="Suporte técnico">Suporte técnico</option>
               <option value="Denúncia">Denúncia</option>
+              <option value="Revogação de patente">Revogação de patente</option>
               <option value="Dúvida ou outro assunto">Dúvida ou outro assunto</option>
             </select>
             <span class="vx-context" id="vx-sup-contexto">Erros, falhas, problemas de acesso ou comportamento inesperado.</span>
@@ -1833,6 +1834,25 @@ p{margin:0}
             <input id="vx-sup-discord" class="vx-input" type="text" maxlength="40" placeholder="ex.: ccxp1_" autocomplete="username">
             <span class="vx-context">Use o username atual da conta, o mesmo usado para adicionar amigos. Não use apenas o nome de exibição.</span>
           </label>
+          <label class="vx-field" id="vx-sup-roblox-wrap" hidden>
+            <span class="vx-fieldlabel">Seu Roblox UserId <small>Obrigatório</small></span>
+            <input id="vx-sup-roblox" class="vx-input" type="text" maxlength="15" inputmode="numeric" placeholder="ex.: 2687494600" autocomplete="off">
+            <span class="vx-context">Informe o UserId numérico da conta que receberá a análise da revogação.</span>
+          </label>
+          <label class="vx-field" id="vx-sup-rank-wrap" hidden>
+            <span class="vx-fieldlabel">Última patente <small>Máximo [S-BTN]</small></span>
+            <select id="vx-sup-rank" class="vx-select">
+              <option value="">Selecione sua última patente</option>
+              <option value="1">[REC] Recruta</option>
+              <option value="2">[SLD] Soldado</option>
+              <option value="3">[CB] Cabo</option>
+              <option value="4">[T-SGT] Terceiro-Sargento</option>
+              <option value="5">[S-SGT] Segundo-Sargento</option>
+              <option value="6">[P-SGT] Primeiro-Sargento</option>
+              <option value="7">[S-BTN] Sub-Tenente</option>
+            </select>
+            <span class="vx-context">Revogações acima de [S-BTN] não são aceitas pelo sistema.</span>
+          </label>
           <label class="vx-field">
             <span class="vx-fieldlabel">Relato <small><span id="vx-sup-contador">0</span> / 1800</small></span>
             <textarea id="vx-sup-problema" class="vx-textarea" maxlength="1800" placeholder="Descreva tudo que a equipe precisa saber para analisar a solicitação."></textarea>
@@ -1845,7 +1865,7 @@ p{margin:0}
             </div>
             <input id="vx-sup-arquivos" class="vx-uploadinput" type="file" accept="image/*" multiple>
           </label>
-          <p class="vx-support-privacy">Não envie senhas, tokens, cookies ou outras credenciais. Em denúncias, envie somente provas relevantes. Os dados serão usados para análise da equipe responsável.</p>
+          <p class="vx-support-privacy">Não envie senhas, tokens, cookies ou outras credenciais. Em denúncias e revogações, envie somente provas relevantes. Para revogação de patente, ao menos uma imagem de comprovação é obrigatória.</p>
           <div class="vx-support-footer">
             <span class="vx-status" id="vx-sup-estado">Aguardando preenchimento</span>
             <button type="button" class="vx-btn primary" id="vx-sup-enviar">Enviar suporte</button>
@@ -3266,6 +3286,10 @@ p{margin:0}
   const vxUsuario = $('#vx-sup-usuario');
   const vxDiscordWrap = $('#vx-sup-discord-wrap');
   const vxDiscord = $('#vx-sup-discord');
+  const vxRobloxWrap = $('#vx-sup-roblox-wrap');
+  const vxRobloxUserId = $('#vx-sup-roblox');
+  const vxRankWrap = $('#vx-sup-rank-wrap');
+  const vxLastRank = $('#vx-sup-rank');
   const vxProblema = $('#vx-sup-problema');
   const vxContador = $('#vx-sup-contador');
   const vxSolta = $('#vx-sup-solta');
@@ -3286,6 +3310,7 @@ p{margin:0}
 
     const tipo = vxTipo.value;
     const precisaDiscord = tipo !== 'Suporte técnico';
+    const isRevocation = tipo === 'Revogação de patente';
 
     if (vxDiscordWrap) vxDiscordWrap.hidden = !precisaDiscord;
     if (vxDiscord) {
@@ -3293,9 +3318,26 @@ p{margin:0}
       if (!precisaDiscord) vxDiscord.value = '';
     }
 
+    if (vxRobloxWrap) vxRobloxWrap.hidden = !isRevocation;
+    if (vxRankWrap) vxRankWrap.hidden = !isRevocation;
+    if (vxRobloxUserId) {
+      vxRobloxUserId.required = isRevocation;
+      if (!isRevocation) vxRobloxUserId.value = '';
+    }
+    if (vxLastRank) {
+      vxLastRank.required = isRevocation;
+      if (!isRevocation) vxLastRank.value = '';
+    }
+
     if (tipo === 'Denúncia') {
       vxContexto.textContent = 'A denúncia será publicada no canal da equipe. Informe o usuário denunciado, motivo, data aproximada e provas.';
       vxProblema.placeholder = 'Quem está sendo denunciado, o que aconteceu, quando ocorreu e quais provas você possui.';
+      return;
+    }
+
+    if (isRevocation) {
+      vxContexto.textContent = 'A revogação será publicada no canal da equipe. Informe seu UserId, sua última patente e anexe uma prova válida. O limite é [S-BTN] Sub-Tenente.';
+      vxProblema.placeholder = 'Informe a instituição anterior e qualquer contexto necessário para a equipe validar sua patente.';
       return;
     }
 
@@ -3338,26 +3380,36 @@ p{margin:0}
 
   vxEnviar?.addEventListener('click', async () => {
     if (!vxUsuario?.value.trim()) { definirEstadoVoxel('Informe seu nome ou usuário', 'error'); vxUsuario?.focus(); return; }
-    const precisaDiscord = vxTipo?.value !== 'Suporte técnico';
+    const categoria = vxTipo?.value || 'Suporte técnico';
+    const precisaDiscord = categoria !== 'Suporte técnico';
+    const isRevocation = categoria === 'Revogação de patente';
     if (precisaDiscord && !vxDiscord?.value.trim()) { definirEstadoVoxel('Informe seu @username do Discord', 'error'); vxDiscord?.focus(); return; }
+    if (isRevocation && !/^\d{1,15}$/.test(vxRobloxUserId?.value.trim() || '')) { definirEstadoVoxel('Informe um Roblox UserId numérico válido', 'error'); vxRobloxUserId?.focus(); return; }
+    if (isRevocation && !/^[1-7]$/.test(vxLastRank?.value || '')) { definirEstadoVoxel('Selecione uma patente válida de [REC] até [S-BTN]', 'error'); vxLastRank?.focus(); return; }
     if ((vxProblema?.value.trim().length || 0) < 20) { definirEstadoVoxel('Descreva o problema com mais contexto', 'error'); vxProblema?.focus(); return; }
+    if (isRevocation && vxAnexos.length === 0) { definirEstadoVoxel('Anexe ao menos uma prova da patente anterior', 'error'); vxSolta?.focus(); return; }
     if (!SUPORTE_ENDPOINT) { definirEstadoVoxel('Endpoint de suporte não configurado', 'error'); return; }
 
     definirEstadoVoxel('Enviando...', '');
     try {
       const dados = new FormData();
-      const categoria = vxTipo?.value || 'Suporte técnico';
       const tipoSolicitacao = categoria === 'Denúncia'
         ? 'report'
-        : categoria === 'Dúvida ou outro assunto'
-          ? 'other'
-          : 'technical';
+        : categoria === 'Revogação de patente'
+          ? 'revocation'
+          : categoria === 'Dúvida ou outro assunto'
+            ? 'other'
+            : 'technical';
 
       dados.append('type', tipoSolicitacao);
       dados.append('sender', vxUsuario.value.trim());
       dados.append('discordUsername', precisaDiscord ? vxDiscord.value.trim() : '');
       dados.append('message', vxProblema.value.trim());
       dados.append('website', '');
+      if (isRevocation) {
+        dados.append('robloxUserId', vxRobloxUserId.value.trim());
+        dados.append('lastRank', vxLastRank.value);
+      }
       vxAnexos.forEach(file => dados.append('images', file));
 
       const respostaHttp = await fetch(SUPORTE_ENDPOINT, { method: 'POST', body: dados });
@@ -3368,6 +3420,8 @@ p{margin:0}
       if (vxTipo) vxTipo.value = 'Suporte técnico';
       vxUsuario.value = '';
       if (vxDiscord) vxDiscord.value = '';
+      if (vxRobloxUserId) vxRobloxUserId.value = '';
+      if (vxLastRank) vxLastRank.value = '';
       vxProblema.value = '';
       atualizarContextoVoxel();
       if (vxContador) vxContador.textContent = '0';
