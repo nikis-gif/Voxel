@@ -8,9 +8,8 @@ function now() {
 }
 
 export class GameBridgeService {
-  constructor({ persistentStore = null } = {}) {
+  constructor() {
     this.actions = new Map();
-    this.persistentStore = persistentStore;
   }
 
   request(type, payload, timeoutMs = DEFAULT_TIMEOUT_MS) {
@@ -43,12 +42,7 @@ export class GameBridgeService {
     });
   }
 
-  async poll(serverId, onlineUserIds = []) {
-    if (this.persistentStore) {
-      const persistentAction = await this.persistentStore.claimNext(serverId);
-      if (persistentAction) return persistentAction;
-    }
-
+  pollTransient(serverId, onlineUserIds = []) {
     const timestamp = now();
     const online = new Set(
       (onlineUserIds ?? [])
@@ -75,36 +69,28 @@ export class GameBridgeService {
     return null;
   }
 
-  async complete({ serverId, actionId, success, data = null, error = null }) {
+
+  completeTransient({ serverId, actionId, success, data = null, error = null }) {
     const action = this.actions.get(actionId);
-    if (action) {
-      if (action.claimServerId !== serverId) return false;
+    if (!action || action.claimServerId !== serverId) return false;
 
-      this.actions.delete(actionId);
-      clearTimeout(action.timer);
+    this.actions.delete(actionId);
+    clearTimeout(action.timer);
 
-      if (success) {
-        action.resolve(data);
-        return true;
-      }
-
-      const resultError = new Error(
-        typeof error === "string" && error.trim()
-          ? error.trim()
-          : "O servidor do jogo recusou a ação."
-      );
-      resultError.code = "GAME_BRIDGE_ACTION_FAILED";
-      action.reject(resultError);
+    if (success) {
+      action.resolve(data);
       return true;
     }
 
-    if (!this.persistentStore) return false;
-    return this.persistentStore.complete({
-      serverId,
-      actionId,
-      success,
-      data,
-      error
-    });
+    const resultError = new Error(
+      typeof error === "string" && error.trim()
+        ? error.trim()
+        : "O servidor do jogo recusou a ação."
+    );
+    resultError.code = "GAME_BRIDGE_ACTION_FAILED";
+    action.reject(resultError);
+    return true;
   }
+
+
 }
