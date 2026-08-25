@@ -4,6 +4,7 @@ const ROOT_PATH = "voxel/v1/communityOperations";
 const CLAIM_TTL_MS = 45_000;
 const CLAIM_CANDIDATE_LIMIT = 100;
 const RECENT_SCAN_LIMIT = 200;
+const REPAIR_SCAN_INTERVAL_MS = 15_000;
 const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
 const ACTIVE_STATUSES = new Set(["pending", "processing"]);
 const ALLOWED_TYPES = new Set([
@@ -97,15 +98,18 @@ export class CommunityOperationStore {
     this.lastErrorAt = 0;
     this.lastClaimAt = 0;
     this.lastClaimedOperationId = null;
+    this.lastRepairScanAt = 0;
+    this.lastRepairCount = 0;
   }
 
   async init() {
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = this.migrateLegacyIndexes()
-      .then((result) => {
+      .then(async (result) => {
+        const repaired = await this.repairRecoverableIndexes(CLAIM_CANDIDATE_LIMIT);
         this.clearError();
-        return result;
+        return { ...result, repaired: repaired.length };
       })
       .catch((error) => {
         this.recordError(error);
@@ -254,20 +258,74 @@ export class CommunityOperationStore {
     return entries;
   }
 
-  async claimNext(serverId) {
-    await this.init();
+  async repairRecoverableIndexes(limit = CLAIM_CANDIDATE_LIMIT) {
+    const timestamp = now();
+    this.lastRepairScanAt = timestamp;
 
-    let candidates;
-    try {
-      candidates = await this.readIndex(this.pendingRef, {
-        newest: false,
-        limit: CLAIM_CANDIDATE_LIMIT
+    const snapshot = await this.operationsRef.get();
+    const recoverable = [];
+
+    snapshot.forEach((child) => {
+      if (!child.key) return;
+
+      const raw = child.val();
+      if (!raw || typeof raw !== "object") return;
+
+      const operation = normalizeOperation({
+        ...raw,
+        id: raw.id || child.key
       });
-    } catch (error) {
-      this.recordError(error);
-      throw error;
+      if (!operation) return;
+
+      const staleProcessing = operation.status === "processing"
+        && Number(operation.claimExpiresAt ?? 0) <= timestamp;
+      if (operation.status !== "pending" && !staleProcessing) return;
+
+      recoverable.push(operation);
+    });
+
+    recoverable.sort((left, right) => {
+      const leftAt = indexTimestamp(left.createdAt || left.updatedAt, 0);
+      const rightAt = indexTimestamp(right.createdAt || right.updatedAt, 0);
+      return leftAt - rightAt || left.id.localeCompare(right.id);
+    });
+
+    const boundedLimit = Math.max(1, Math.min(500, Number(limit) || CLAIM_CANDIDATE_LIMIT));
+    const selected = recoverable.slice(0, boundedLimit);
+    if (selected.length === 0) return [];
+
+    const updates = {};
+    const candidates = [];
+
+    for (const operation of selected) {
+      const queueKey = operation.queueKey
+        || makeIndexKey(operation.createdAt || operation.updatedAt, operation.id);
+      const recentKey = operation.recentKey
+        || makeIndexKey(operation.createdAt || operation.updatedAt, operation.id);
+
+      updates[`pendingV2/${queueKey}`] = operation.id;
+
+      if (operation.queueKey !== queueKey) {
+        updates[`operations/${operation.id}/queueKey`] = queueKey;
+      }
+
+      if (!operation.recentKey) {
+        updates[`recentV2/${recentKey}`] = operation.id;
+        updates[`operations/${operation.id}/recentKey`] = recentKey;
+      }
+
+      candidates.push({
+        indexKey: queueKey,
+        id: operation.id
+      });
     }
 
+    await this.root.update(updates);
+    this.lastRepairCount = candidates.length;
+    return candidates;
+  }
+
+  async claimFromCandidates(serverId, candidates) {
     const timestamp = now();
 
     for (const candidate of candidates) {
@@ -282,7 +340,10 @@ export class CommunityOperationStore {
         }
 
         if (operation.queueKey && operation.queueKey !== candidate.indexKey) {
-          await this.pendingRef.child(candidate.indexKey).remove().catch(() => {});
+          await this.root.update({
+            [`pendingV2/${candidate.indexKey}`]: null,
+            [`pendingV2/${operation.queueKey}`]: candidate.id
+          }).catch(() => {});
           continue;
         }
 
@@ -358,6 +419,40 @@ export class CommunityOperationStore {
     return null;
   }
 
+  async claimNext(serverId) {
+    await this.init();
+
+    let candidates;
+    try {
+      candidates = await this.readIndex(this.pendingRef, {
+        newest: false,
+        limit: CLAIM_CANDIDATE_LIMIT
+      });
+    } catch (error) {
+      this.recordError(error);
+      throw error;
+    }
+
+    const indexedClaim = await this.claimFromCandidates(serverId, candidates);
+    if (indexedClaim) return indexedClaim;
+
+    // operations/ is the source of truth. Repair orphaned/stale indexes on demand.
+    if (candidates.length === 0 && now() - this.lastRepairScanAt < REPAIR_SCAN_INTERVAL_MS) {
+      return null;
+    }
+
+    let recoveredCandidates;
+    try {
+      recoveredCandidates = await this.repairRecoverableIndexes(CLAIM_CANDIDATE_LIMIT);
+    } catch (error) {
+      this.recordError(error);
+      throw error;
+    }
+
+    if (recoveredCandidates.length === 0) return null;
+    return this.claimFromCandidates(serverId, recoveredCandidates);
+  }
+
   async failInvalidOperation(operationRef, queueKey, reason) {
     const timestamp = now();
     await operationRef.transaction((current) => {
@@ -416,15 +511,31 @@ export class CommunityOperationStore {
   async cancel(id, cancelledByDiscordId) {
     await this.init();
 
-    const operationRef = this.operationsRef.child(String(id));
+    const operationId = String(id);
+    const operationRef = this.operationsRef.child(operationId);
     const timestamp = now();
     let queueKey = null;
+    let resourceKey = null;
+    let claimServerId = null;
 
     const result = await operationRef.transaction((current) => {
       if (!current || typeof current !== "object") return;
-      if (String(current.status ?? "") !== "pending") return;
+
+      const status = String(current.status ?? "");
+      if (status === "cancelled") return current;
+
+      const staleProcessing = status === "processing"
+        && Number(current.claimExpiresAt ?? 0) <= timestamp;
+      if (status !== "pending" && !staleProcessing) return;
 
       queueKey = typeof current.queueKey === "string" ? current.queueKey : null;
+      resourceKey = typeof current.resourceKey === "string"
+        ? current.resourceKey
+        : operationResourceKey(current.payload);
+      claimServerId = typeof current.claimServerId === "string"
+        ? current.claimServerId
+        : null;
+
       return {
         ...current,
         status: "cancelled",
@@ -433,13 +544,41 @@ export class CommunityOperationStore {
         updatedAt: timestamp,
         completedAt: timestamp,
         claimServerId: null,
-        claimExpiresAt: 0
+        claimExpiresAt: 0,
+        error: null
       };
     });
 
-    if (!result.committed) return null;
-    if (queueKey) await this.pendingRef.child(queueKey).remove().catch(() => {});
-    return normalizeOperation(result.snapshot.val());
+    if (!result.committed) {
+      const latest = normalizeOperation((await operationRef.get()).val());
+      return latest?.status === "cancelled" ? latest : null;
+    }
+
+    const cancelled = normalizeOperation(result.snapshot.val());
+    if (!cancelled || cancelled.status !== "cancelled") return null;
+
+    if (queueKey) {
+      await this.pendingRef.child(queueKey).remove().catch(() => {});
+    } else {
+      const pendingSnapshot = await this.pendingRef.get().catch(() => null);
+      const cleanup = {};
+
+      pendingSnapshot?.forEach((child) => {
+        if (String(child.val() ?? "") === operationId && child.key) {
+          cleanup[`pendingV2/${child.key}`] = null;
+        }
+      });
+
+      if (Object.keys(cleanup).length > 0) {
+        await this.root.update(cleanup).catch(() => {});
+      }
+    }
+
+    if (resourceKey && claimServerId) {
+      await this.releaseLock(resourceKey, operationId, claimServerId);
+    }
+
+    return cancelled;
   }
 
   async retry(id, retriedByDiscordId) {
@@ -526,15 +665,53 @@ export class CommunityOperationStore {
   async diagnostics() {
     await this.init();
 
-    const [pendingSnapshot, recentSnapshot] = await Promise.all([
+    const [pendingSnapshot, recentSnapshot, operationsSnapshot] = await Promise.all([
       this.pendingRef.get(),
-      this.recentRef.get()
+      this.recentRef.get(),
+      this.operationsRef.get()
     ]);
 
+    const indexedIds = new Set();
+    pendingSnapshot.forEach((child) => {
+      const id = String(child.val() ?? "");
+      if (id) indexedIds.add(id);
+    });
+
+    const timestamp = now();
+    let activeOperationCount = 0;
+    let orphanedOperationCount = 0;
+    let staleProcessingCount = 0;
+
+    operationsSnapshot.forEach((child) => {
+      if (!child.key) return;
+      const raw = child.val();
+      if (!raw || typeof raw !== "object") return;
+
+      const operation = normalizeOperation({
+        ...raw,
+        id: raw.id || child.key
+      });
+      if (!operation) return;
+
+      const staleProcessing = operation.status === "processing"
+        && Number(operation.claimExpiresAt ?? 0) <= timestamp;
+      const active = operation.status === "pending" || staleProcessing;
+      if (!active) return;
+
+      activeOperationCount += 1;
+      if (staleProcessing) staleProcessingCount += 1;
+      if (!indexedIds.has(operation.id)) orphanedOperationCount += 1;
+    });
+
     return {
-      queueVersion: 2,
+      queueVersion: 3,
       pendingCount: pendingSnapshot.numChildren(),
+      activeOperationCount,
+      orphanedOperationCount,
+      staleProcessingCount,
       recentIndexCount: recentSnapshot.numChildren(),
+      lastRepairScanAt: this.lastRepairScanAt || null,
+      lastRepairCount: this.lastRepairCount,
       lastClaimAt: this.lastClaimAt || null,
       lastClaimedOperationId: this.lastClaimedOperationId,
       lastError: this.lastError,
