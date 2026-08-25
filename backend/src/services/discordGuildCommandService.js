@@ -1003,6 +1003,12 @@ export class DiscordGuildCommandService {
       const lastError = queue.lastError
         ? `${queue.lastError}\n${queue.lastErrorAt ? `Registrado ${discordTimestamp(queue.lastErrorAt)}` : ""}`.trim()
         : "Nenhum erro interno registrado.";
+      const bridgePoll = queue.bridgePoll && typeof queue.bridgePoll === "object"
+        ? queue.bridgePoll
+        : null;
+      const persistedPoll = bridgePoll
+        ? `**${bridgePoll.stage || "unknown"}** • ${discordTimestamp(bridgePoll.updatedAt)}\nServidor: \`${String(bridgePoll.serverId || "?").slice(0, 80)}\`${bridgePoll.actionId ? `\nOperação: \`${bridgePoll.actionId}\`` : ""}${bridgePoll.error ? `\nErro: ${String(bridgePoll.error).slice(0, 500)}` : ""}`
+        : "Nenhum poll persistido pela fila v5 ainda.";
 
       await interaction.editReply({
         embeds: [baseEmbed(
@@ -1022,6 +1028,7 @@ export class DiscordGuildCommandService {
           { name: "Locks recuperados", value: `${queue.recoveredSameOperationLocks ?? 0} reentrante(s) • ${queue.recoveredCorruptLocks ?? 0} corrompido(s)`, inline: true },
           { name: "Locks futuros inválidos", value: String(queue.corruptFutureLockCount ?? 0), inline: true },
           { name: "Último reparo", value: queue.lastRepairScanAt ? `${discordTimestamp(queue.lastRepairScanAt)} • ${queue.lastRepairCount ?? 0} reparada(s)` : "Ainda não executado", inline: false },
+          { name: "Último poll persistido", value: persistedPoll.slice(0, 1000), inline: false },
           { name: "Último bloqueio por lock", value: queue.lastLockBlockedAt
             ? `Operação \`${queue.lastLockBlockedOperationId ?? "?"}\` bloqueada por \`${queue.lastLockOwnerOperationId ?? "?"}\` • ${discordTimestamp(queue.lastLockBlockedAt)}`
             : "Nenhum lock bloqueou uma entrega neste processo.", inline: false },
