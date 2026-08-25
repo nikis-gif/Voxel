@@ -51,7 +51,9 @@ export function createSupportController({
       const rawMessage = normalizeMultiline(req.body.message, 1800);
       const type = normalizeSupportType(req.body.type, rawMessage);
       const message = normalizeMultiline(removeLegacyTypePrefix(rawMessage), 1800);
-      const discordUsername = normalizeSingleLine(req.body.discordUsername, 40).replace(/^@/, "");
+      const discordUsername = type === "technical"
+        ? ""
+        : normalizeSingleLine(req.body.discordUsername, 40).replace(/^@/, "");
       const robloxUsername = type === "revocation" ? parseRobloxUsername(req.body.robloxUsername) : null;
       const lastRank = type === "revocation" ? parseRevocationRank(req.body.lastRank) : null;
       const files = Array.isArray(req.files) ? req.files : [];
