@@ -156,8 +156,8 @@ function buildTicketEmbed(ticket, botAvatar, discordMember = null) {
   if (ticket.type === "revocation") {
     fields.push(
       {
-        name: "Roblox UserId",
-        value: `\`${ticket.robloxUserId}\``,
+        name: "Nickname no Roblox",
+        value: `\`@${ticket.robloxUsername}\``,
         inline: true
       },
       {
@@ -367,7 +367,7 @@ export class DiscordSupportService {
       sender: ticket.sender,
       discordUserId: member.id,
       discordUsername: member.user.username,
-      robloxUserId: ticket.type === "revocation" ? Number(ticket.robloxUserId) : null,
+      robloxUsername: ticket.type === "revocation" ? String(ticket.robloxUsername) : null,
       lastRank: ticket.type === "revocation" ? Number(ticket.lastRank) : null,
       channelId: String(channelId),
       messageId: null,
