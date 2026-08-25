@@ -11,7 +11,7 @@ export const supportUpload = multer({
   limits: {
     files: MAX_FILES,
     fileSize: MAX_FILE_SIZE,
-    // Base support fields + revocation UserId/rank metadata.
+    // Base support fields + revocation username/rank metadata.
     fields: 7,
     fieldSize: 8 * 1024
   },
