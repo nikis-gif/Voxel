@@ -5,6 +5,7 @@ const CLAIM_TTL_MS = 45_000;
 const CLAIM_CANDIDATE_LIMIT = 100;
 const RECENT_SCAN_LIMIT = 200;
 const REPAIR_SCAN_INTERVAL_MS = 15_000;
+const MAX_SANE_LOCK_FUTURE_MS = CLAIM_TTL_MS * 4;
 const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
 const ACTIVE_STATUSES = new Set(["pending", "processing"]);
 const ALLOWED_TYPES = new Set([
@@ -100,6 +101,13 @@ export class CommunityOperationStore {
     this.lastClaimedOperationId = null;
     this.lastRepairScanAt = 0;
     this.lastRepairCount = 0;
+    this.lastLockBlockedAt = 0;
+    this.lastLockBlockedOperationId = null;
+    this.lastLockOwnerOperationId = null;
+    this.lastLockOwnerServerId = null;
+    this.lastLockExpiresAt = 0;
+    this.recoveredSameOperationLocks = 0;
+    this.recoveredCorruptLocks = 0;
   }
 
   async init() {
@@ -347,6 +355,10 @@ export class CommunityOperationStore {
           continue;
         }
 
+        const activeProcessing = operation.status === "processing"
+          && Number(operation.claimExpiresAt ?? 0) > timestamp;
+        if (activeProcessing) continue;
+
         const validationError = validateOperation(operation);
         if (validationError) {
           await this.failInvalidOperation(operationRef, candidate.indexKey, validationError);
@@ -355,9 +367,30 @@ export class CommunityOperationStore {
 
         const resourceKey = operation.resourceKey || operationResourceKey(operation.payload);
         const lockRef = this.locksRef.child(resourceKey);
+        let blockedLock = null;
+        let recoveredSameOperationLock = false;
+        let recoveredCorruptLock = false;
+
         const lock = await lockRef.transaction((current) => {
+          const currentOperationId = String(current?.operationId ?? "");
+          const currentServerId = String(current?.serverId ?? "");
           const currentExpiresAt = Number(current?.expiresAt ?? 0);
-          if (current?.operationId && currentExpiresAt > timestamp) return;
+          const finiteExpiry = Number.isFinite(currentExpiresAt) ? currentExpiresAt : 0;
+          const sameOperation = currentOperationId === candidate.id;
+          const activeLock = Boolean(currentOperationId) && finiteExpiry > timestamp;
+          const impossibleFuture = finiteExpiry > timestamp + MAX_SANE_LOCK_FUTURE_MS;
+
+          if (activeLock && !sameOperation && !impossibleFuture) {
+            blockedLock = {
+              operationId: currentOperationId,
+              serverId: currentServerId,
+              expiresAt: finiteExpiry
+            };
+            return;
+          }
+
+          if (sameOperation && activeLock) recoveredSameOperationLock = true;
+          if (impossibleFuture) recoveredCorruptLock = true;
 
           return {
             operationId: candidate.id,
@@ -367,7 +400,19 @@ export class CommunityOperationStore {
           };
         });
 
-        if (!lock.committed) continue;
+        if (!lock.committed) {
+          if (blockedLock) {
+            this.lastLockBlockedAt = timestamp;
+            this.lastLockBlockedOperationId = candidate.id;
+            this.lastLockOwnerOperationId = blockedLock.operationId;
+            this.lastLockOwnerServerId = blockedLock.serverId;
+            this.lastLockExpiresAt = blockedLock.expiresAt;
+          }
+          continue;
+        }
+
+        if (recoveredSameOperationLock) this.recoveredSameOperationLocks += 1;
+        if (recoveredCorruptLock) this.recoveredCorruptLocks += 1;
 
         const claim = await operationRef.transaction((current) => {
           if (!current || typeof current !== "object") return;
@@ -665,10 +710,11 @@ export class CommunityOperationStore {
   async diagnostics() {
     await this.init();
 
-    const [pendingSnapshot, recentSnapshot, operationsSnapshot] = await Promise.all([
+    const [pendingSnapshot, recentSnapshot, operationsSnapshot, locksSnapshot] = await Promise.all([
       this.pendingRef.get(),
       this.recentRef.get(),
-      this.operationsRef.get()
+      this.operationsRef.get(),
+      this.locksRef.get()
     ]);
 
     const indexedIds = new Set();
@@ -703,8 +749,28 @@ export class CommunityOperationStore {
       if (!indexedIds.has(operation.id)) orphanedOperationCount += 1;
     });
 
+    let resourceLockCount = 0;
+    let activeResourceLockCount = 0;
+    let staleResourceLockCount = 0;
+    let corruptFutureLockCount = 0;
+
+    locksSnapshot.forEach((child) => {
+      const lock = child.val();
+      if (!lock || typeof lock !== "object") return;
+      resourceLockCount += 1;
+
+      const expiresAt = Number(lock.expiresAt ?? 0);
+      if (expiresAt > timestamp + MAX_SANE_LOCK_FUTURE_MS) {
+        corruptFutureLockCount += 1;
+      } else if (expiresAt > timestamp) {
+        activeResourceLockCount += 1;
+      } else {
+        staleResourceLockCount += 1;
+      }
+    });
+
     return {
-      queueVersion: 3,
+      queueVersion: 4,
       pendingCount: pendingSnapshot.numChildren(),
       activeOperationCount,
       orphanedOperationCount,
@@ -714,6 +780,17 @@ export class CommunityOperationStore {
       lastRepairCount: this.lastRepairCount,
       lastClaimAt: this.lastClaimAt || null,
       lastClaimedOperationId: this.lastClaimedOperationId,
+      resourceLockCount,
+      activeResourceLockCount,
+      staleResourceLockCount,
+      corruptFutureLockCount,
+      recoveredSameOperationLocks: this.recoveredSameOperationLocks,
+      recoveredCorruptLocks: this.recoveredCorruptLocks,
+      lastLockBlockedAt: this.lastLockBlockedAt || null,
+      lastLockBlockedOperationId: this.lastLockBlockedOperationId,
+      lastLockOwnerOperationId: this.lastLockOwnerOperationId,
+      lastLockOwnerServerId: this.lastLockOwnerServerId,
+      lastLockExpiresAt: this.lastLockExpiresAt || null,
       lastError: this.lastError,
       lastErrorAt: this.lastErrorAt || null
     };
