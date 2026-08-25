@@ -1,4 +1,13 @@
-export function createGameBridgeController(gameBridgeService, gamePresenceService = null) {
+function safeQueueErrorCode(error) {
+  const rawCode = typeof error?.code === "string" ? error.code : "QUEUE_BACKEND_ERROR";
+  return rawCode.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80) || "QUEUE_BACKEND_ERROR";
+}
+
+export function createGameBridgeController({
+  gameBridgeService,
+  gamePresenceService = null,
+  communityOperationStore = null
+}) {
   return Object.freeze({
     async poll(req, res) {
       const serverId = typeof req.body?.serverId === "string" ? req.body.serverId.trim() : "";
@@ -36,15 +45,41 @@ export function createGameBridgeController(gameBridgeService, gamePresenceServic
       }
 
       let action = null;
+      let persistentDelivered = false;
       try {
-        action = await gameBridgeService.poll(serverId, onlineUserIds);
+        if (communityOperationStore) {
+          action = await communityOperationStore.claimNext(serverId);
+          persistentDelivered = Boolean(action);
+        }
+
+        if (!action) {
+          action = gameBridgeService.pollTransient(serverId, onlineUserIds);
+        }
+
+        if (communityOperationStore) {
+          await communityOperationStore.recordBridgePoll({
+            serverId,
+            placeId,
+            bridgeVersion,
+            stage: action
+              ? (persistentDelivered ? "persistent-delivered" : "transient-delivered")
+              : "queue-empty",
+            actionId: action?.id ?? null
+          });
+        }
       } catch (error) {
         console.error(`[bridge] Queue poll failed for ${serverId}:`, error);
-        const rawCode = typeof error?.code === "string" ? error.code : "QUEUE_BACKEND_ERROR";
-        const safeCode = rawCode.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80) || "QUEUE_BACKEND_ERROR";
+        await communityOperationStore?.recordBridgePoll({
+          serverId,
+          placeId,
+          bridgeVersion,
+          stage: "queue-error",
+          error: error?.message ?? String(error)
+        }).catch(() => {});
+
         res.status(503).json({
           success: false,
-          error: `A fila de comunidades está indisponível no backend (${safeCode}).`
+          error: `A fila de comunidades está indisponível no backend (${safeQueueErrorCode(error)}).`
         });
         return;
       }
@@ -62,13 +97,21 @@ export function createGameBridgeController(gameBridgeService, gamePresenceServic
         return;
       }
 
-      const accepted = await gameBridgeService.complete({
+      const resultPayload = {
         serverId,
         actionId,
         success,
         data: req.body?.data ?? null,
         error: typeof req.body?.error === "string" ? req.body.error : null
-      });
+      };
+
+      let accepted = false;
+      if (communityOperationStore) {
+        accepted = await communityOperationStore.complete(resultPayload);
+      }
+      if (!accepted) {
+        accepted = gameBridgeService.completeTransient(resultPayload);
+      }
 
       res.json({ success: true, data: { accepted } });
     }
