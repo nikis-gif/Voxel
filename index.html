@@ -1026,6 +1026,7 @@ p{margin:0}
   display:block;
   margin-bottom:15px;
 }
+.vx-field[hidden]{display:none!important}
 .vx-field:last-of-type{margin-bottom:0}
 .vx-fieldlabel{
   display:flex;
@@ -1811,7 +1812,7 @@ p{margin:0}
           <div class="vx-support-avatar"><span class="vx-mark"><i></i></span></div>
           <div>
             <div class="vx-support-botname">Voxel Support <span>app</span></div>
-            <p>Para suporte técnico, explique o erro e como reproduzir. Em denúncias, revogações e outros assuntos, informe também seu @username exato do Discord para que o Voxel consiga enviar as atualizações da equipe por mensagem privada.</p>
+            <p>Cada categoria mostra somente os campos necessários. Suporte técnico não exige Discord; denúncias e outros assuntos pedem Discord para retorno por DM; revogações também exigem nickname no Roblox, última patente e prova.</p>
           </div>
         </div>
         <div class="vx-form">
@@ -3312,14 +3313,20 @@ p{margin:0}
     const precisaDiscord = tipo !== 'Suporte técnico';
     const isRevocation = tipo === 'Revogação de patente';
 
-    if (vxDiscordWrap) vxDiscordWrap.hidden = !precisaDiscord;
+    const setFieldVisible = (field, visible) => {
+      if (!field) return;
+      field.hidden = !visible;
+      field.style.display = visible ? '' : 'none';
+    };
+
+    setFieldVisible(vxDiscordWrap, precisaDiscord);
     if (vxDiscord) {
       vxDiscord.required = precisaDiscord;
       if (!precisaDiscord) vxDiscord.value = '';
     }
 
-    if (vxRobloxWrap) vxRobloxWrap.hidden = !isRevocation;
-    if (vxRankWrap) vxRankWrap.hidden = !isRevocation;
+    setFieldVisible(vxRobloxWrap, isRevocation);
+    setFieldVisible(vxRankWrap, isRevocation);
     if (vxRobloxUsername) {
       vxRobloxUsername.required = isRevocation;
       if (!isRevocation) vxRobloxUsername.value = '';
