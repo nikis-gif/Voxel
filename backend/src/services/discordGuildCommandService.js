@@ -1018,7 +1018,13 @@ export class DiscordGuildCommandService {
           { name: "Órfãs do índice", value: String(queue.orphanedOperationCount ?? 0), inline: true },
           { name: "Claims expirados", value: String(queue.staleProcessingCount ?? 0), inline: true },
           { name: "Índice recente", value: String(queue.recentIndexCount), inline: true },
+          { name: "Locks de recurso", value: `${queue.activeResourceLockCount ?? 0} ativo(s) • ${queue.staleResourceLockCount ?? 0} expirado(s)`, inline: true },
+          { name: "Locks recuperados", value: `${queue.recoveredSameOperationLocks ?? 0} reentrante(s) • ${queue.recoveredCorruptLocks ?? 0} corrompido(s)`, inline: true },
+          { name: "Locks futuros inválidos", value: String(queue.corruptFutureLockCount ?? 0), inline: true },
           { name: "Último reparo", value: queue.lastRepairScanAt ? `${discordTimestamp(queue.lastRepairScanAt)} • ${queue.lastRepairCount ?? 0} reparada(s)` : "Ainda não executado", inline: false },
+          { name: "Último bloqueio por lock", value: queue.lastLockBlockedAt
+            ? `Operação \`${queue.lastLockBlockedOperationId ?? "?"}\` bloqueada por \`${queue.lastLockOwnerOperationId ?? "?"}\` • ${discordTimestamp(queue.lastLockBlockedAt)}`
+            : "Nenhum lock bloqueou uma entrega neste processo.", inline: false },
           { name: "Última entrega", value: lastClaim, inline: false },
           { name: "Última operação entregue", value: queue.lastClaimedOperationId ? `\`${queue.lastClaimedOperationId}\`` : "Nenhuma", inline: false },
           { name: "Último erro da fila", value: lastError.slice(0, 1000), inline: false }
