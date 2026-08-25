@@ -5,7 +5,7 @@ const CLAIM_TTL_MS = 45_000;
 const CLAIM_CANDIDATE_LIMIT = 100;
 const RECENT_SCAN_LIMIT = 200;
 const REPAIR_SCAN_INTERVAL_MS = 15_000;
-const MAX_SANE_LOCK_FUTURE_MS = CLAIM_TTL_MS * 4;
+const BRIDGE_TELEMETRY_WRITE_INTERVAL_MS = 5_000;
 const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
 const ACTIVE_STATUSES = new Set(["pending", "processing"]);
 const ALLOWED_TYPES = new Set([
@@ -92,7 +92,8 @@ export class CommunityOperationStore {
     this.recentRef = this.root.child("recentV2");
     this.legacyPendingRef = this.root.child("pending");
     this.legacyRecentRef = this.root.child("recent");
-    this.locksRef = this.root.child("locks");
+    this.locksRef = this.root.child("locks"); // Legacy v4 cleanup only.
+    this.bridgeTelemetryRef = this.root.child("telemetry/bridge");
 
     this.initPromise = null;
     this.lastError = null;
@@ -108,6 +109,7 @@ export class CommunityOperationStore {
     this.lastLockExpiresAt = 0;
     this.recoveredSameOperationLocks = 0;
     this.recoveredCorruptLocks = 0;
+    this.lastTelemetryWriteByServer = new Map();
   }
 
   async init() {
@@ -116,6 +118,9 @@ export class CommunityOperationStore {
     this.initPromise = this.migrateLegacyIndexes()
       .then(async (result) => {
         const repaired = await this.repairRecoverableIndexes(CLAIM_CANDIDATE_LIMIT);
+        await this.locksRef.remove().catch((error) => {
+          console.warn("[community-queue] Failed to clear legacy v4 locks:", error);
+        });
         this.clearError();
         return { ...result, repaired: repaired.length };
       })
@@ -357,7 +362,10 @@ export class CommunityOperationStore {
 
         const activeProcessing = operation.status === "processing"
           && Number(operation.claimExpiresAt ?? 0) > timestamp;
-        if (activeProcessing) continue;
+        if (activeProcessing) {
+          // Persistent community operations are intentionally serialized globally.
+          return null;
+        }
 
         const validationError = validateOperation(operation);
         if (validationError) {
@@ -366,54 +374,6 @@ export class CommunityOperationStore {
         }
 
         const resourceKey = operation.resourceKey || operationResourceKey(operation.payload);
-        const lockRef = this.locksRef.child(resourceKey);
-        let blockedLock = null;
-        let recoveredSameOperationLock = false;
-        let recoveredCorruptLock = false;
-
-        const lock = await lockRef.transaction((current) => {
-          const currentOperationId = String(current?.operationId ?? "");
-          const currentServerId = String(current?.serverId ?? "");
-          const currentExpiresAt = Number(current?.expiresAt ?? 0);
-          const finiteExpiry = Number.isFinite(currentExpiresAt) ? currentExpiresAt : 0;
-          const sameOperation = currentOperationId === candidate.id;
-          const activeLock = Boolean(currentOperationId) && finiteExpiry > timestamp;
-          const impossibleFuture = finiteExpiry > timestamp + MAX_SANE_LOCK_FUTURE_MS;
-
-          if (activeLock && !sameOperation && !impossibleFuture) {
-            blockedLock = {
-              operationId: currentOperationId,
-              serverId: currentServerId,
-              expiresAt: finiteExpiry
-            };
-            return;
-          }
-
-          if (sameOperation && activeLock) recoveredSameOperationLock = true;
-          if (impossibleFuture) recoveredCorruptLock = true;
-
-          return {
-            operationId: candidate.id,
-            serverId,
-            expiresAt: timestamp + CLAIM_TTL_MS,
-            claimedAt: timestamp
-          };
-        });
-
-        if (!lock.committed) {
-          if (blockedLock) {
-            this.lastLockBlockedAt = timestamp;
-            this.lastLockBlockedOperationId = candidate.id;
-            this.lastLockOwnerOperationId = blockedLock.operationId;
-            this.lastLockOwnerServerId = blockedLock.serverId;
-            this.lastLockExpiresAt = blockedLock.expiresAt;
-          }
-          continue;
-        }
-
-        if (recoveredSameOperationLock) this.recoveredSameOperationLocks += 1;
-        if (recoveredCorruptLock) this.recoveredCorruptLocks += 1;
-
         const claim = await operationRef.transaction((current) => {
           if (!current || typeof current !== "object") return;
           if (TERMINAL_STATUSES.has(String(current.status ?? ""))) return;
@@ -436,15 +396,11 @@ export class CommunityOperationStore {
         });
 
         if (!claim.committed) {
-          await this.releaseLock(resourceKey, candidate.id, serverId);
-          continue;
+          return null;
         }
 
         const claimed = normalizeOperation(claim.snapshot.val());
-        if (!claimed) {
-          await this.releaseLock(resourceKey, candidate.id, serverId);
-          continue;
-        }
+        if (!claimed) return null;
 
         this.lastClaimAt = timestamp;
         this.lastClaimedOperationId = claimed.id;
@@ -458,6 +414,7 @@ export class CommunityOperationStore {
       } catch (error) {
         this.recordError(error);
         console.error(`[community-queue] Failed to inspect/claim ${candidate.id}:`, error);
+        throw error;
       }
     }
 
@@ -524,7 +481,6 @@ export class CommunityOperationStore {
 
     const operationRef = this.operationsRef.child(String(actionId));
     const timestamp = now();
-    let resourceKey = null;
     let queueKey = null;
 
     const result = await operationRef.transaction((current) => {
@@ -532,7 +488,6 @@ export class CommunityOperationStore {
       if (String(current.status ?? "") !== "processing") return;
       if (String(current.claimServerId ?? "") !== String(serverId)) return;
 
-      resourceKey = String(current.resourceKey || operationResourceKey(current.payload));
       queueKey = typeof current.queueKey === "string" ? current.queueKey : null;
       return {
         ...current,
@@ -549,7 +504,6 @@ export class CommunityOperationStore {
     if (!result.committed) return false;
 
     if (queueKey) await this.pendingRef.child(queueKey).remove().catch(() => {});
-    if (resourceKey) await this.releaseLock(resourceKey, String(actionId), String(serverId));
     return true;
   }
 
@@ -707,14 +661,49 @@ export class CommunityOperationStore {
     return operations;
   }
 
+  async recordBridgePoll({
+    serverId,
+    placeId = 0,
+    bridgeVersion = "legacy",
+    stage = "unknown",
+    actionId = null,
+    error = null
+  }) {
+    const timestamp = now();
+    const id = String(serverId ?? "").trim();
+    if (!id) return;
+
+    const critical = stage === "persistent-delivered" || stage === "queue-error";
+    const lastWriteAt = Number(this.lastTelemetryWriteByServer.get(id) ?? 0);
+    if (!critical && timestamp - lastWriteAt < BRIDGE_TELEMETRY_WRITE_INTERVAL_MS) return;
+    this.lastTelemetryWriteByServer.set(id, timestamp);
+
+    const serverKey = createHash("sha256").update(id).digest("hex").slice(0, 32);
+    const record = {
+      serverId: id,
+      placeId: Number(placeId) || 0,
+      bridgeVersion: String(bridgeVersion || "legacy").slice(0, 40),
+      stage: String(stage || "unknown").slice(0, 80),
+      actionId: actionId ? String(actionId).slice(0, 100) : null,
+      error: error ? String(error).slice(0, 500) : null,
+      updatedAt: timestamp
+    };
+
+    await this.bridgeTelemetryRef.update({
+      last: record,
+      [`servers/${serverKey}`]: record
+    });
+  }
+
   async diagnostics() {
     await this.init();
 
-    const [pendingSnapshot, recentSnapshot, operationsSnapshot, locksSnapshot] = await Promise.all([
+    const [pendingSnapshot, recentSnapshot, operationsSnapshot, locksSnapshot, bridgeTelemetrySnapshot] = await Promise.all([
       this.pendingRef.get(),
       this.recentRef.get(),
       this.operationsRef.get(),
-      this.locksRef.get()
+      this.locksRef.get(),
+      this.bridgeTelemetryRef.child("last").get()
     ]);
 
     const indexedIds = new Set();
@@ -770,7 +759,7 @@ export class CommunityOperationStore {
     });
 
     return {
-      queueVersion: 4,
+      queueVersion: 5,
       pendingCount: pendingSnapshot.numChildren(),
       activeOperationCount,
       orphanedOperationCount,
@@ -792,7 +781,8 @@ export class CommunityOperationStore {
       lastLockOwnerServerId: this.lastLockOwnerServerId,
       lastLockExpiresAt: this.lastLockExpiresAt || null,
       lastError: this.lastError,
-      lastErrorAt: this.lastErrorAt || null
+      lastErrorAt: this.lastErrorAt || null,
+      bridgePoll: bridgeTelemetrySnapshot.val() ?? null
     };
   }
 
