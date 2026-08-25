@@ -1,22 +1,38 @@
 import { randomUUID } from "node:crypto";
 import { isSupportedImageBuffer, normalizeMultiline, normalizeSingleLine } from "../utils/text.js";
 
-const SUPPORT_TYPES = new Set(["technical", "report", "other"]);
-const LEGACY_TYPE_PREFIX = /^\[\s*(Suporte técnico|Denúncia|Dúvida ou outro assunto)\s*\]\s*/iu;
+const SUPPORT_TYPES = new Set(["technical", "report", "revocation", "other"]);
+const LEGACY_TYPE_PREFIX = /^\[\s*(Suporte técnico|Denúncia|Revogação de patente|Dúvida ou outro assunto)\s*\]\s*/iu;
 
 function normalizeSupportType(value, message) {
   const raw = String(value ?? "").normalize("NFKC").trim().toLowerCase();
   if (SUPPORT_TYPES.has(raw)) return raw;
   if (raw === "denúncia" || raw === "denuncia") return "report";
+  if (raw === "revogação" || raw === "revogacao" || raw === "revogação de patente" || raw === "revogacao de patente") return "revocation";
 
   const legacyType = String(message ?? "").match(LEGACY_TYPE_PREFIX)?.[1]?.toLowerCase();
   if (legacyType === "denúncia" || legacyType === "denuncia") return "report";
+  if (legacyType === "revogação de patente" || legacyType === "revogacao de patente") return "revocation";
   if (legacyType === "dúvida ou outro assunto" || legacyType === "duvida ou outro assunto") return "other";
   return "technical";
 }
 
 function removeLegacyTypePrefix(message) {
   return String(message ?? "").replace(LEGACY_TYPE_PREFIX, "").trim();
+}
+
+function parseRobloxUserId(value) {
+  const raw = String(value ?? "").trim();
+  if (!/^\d{1,15}$/.test(raw)) return null;
+
+  const userId = Number(raw);
+  return Number.isSafeInteger(userId) && userId > 0 ? userId : null;
+}
+
+function parseRevocationRank(value) {
+  const raw = String(value ?? "").trim();
+  if (!/^[1-7]$/.test(raw)) return null;
+  return Number(raw);
 }
 
 export function createSupportController({
@@ -39,6 +55,8 @@ export function createSupportController({
       const type = normalizeSupportType(req.body.type, rawMessage);
       const message = normalizeMultiline(removeLegacyTypePrefix(rawMessage), 1800);
       const discordUsername = normalizeSingleLine(req.body.discordUsername, 40).replace(/^@/, "");
+      const robloxUserId = type === "revocation" ? parseRobloxUserId(req.body.robloxUserId) : null;
+      const lastRank = type === "revocation" ? parseRevocationRank(req.body.lastRank) : null;
       const files = Array.isArray(req.files) ? req.files : [];
 
       if (!sender) {
@@ -48,6 +66,16 @@ export function createSupportController({
 
       if (type !== "technical" && !discordUsername) {
         res.status(400).json({ error: "Informe seu @username do Discord para receber o status da solicitação." });
+        return;
+      }
+
+      if (type === "revocation" && !robloxUserId) {
+        res.status(400).json({ error: "Informe um Roblox UserId numérico válido." });
+        return;
+      }
+
+      if (type === "revocation" && !lastRank) {
+        res.status(400).json({ error: "A revogação aceita somente patentes de [REC] até [S-BTN]." });
         return;
       }
 
@@ -62,7 +90,12 @@ export function createSupportController({
         return;
       }
 
-      const ticketPayload = { type, sender, discordUsername, message, files };
+      if (type === "revocation" && files.length === 0) {
+        res.status(400).json({ error: "Anexe ao menos uma prova da patente anterior." });
+        return;
+      }
+
+      const ticketPayload = { type, sender, discordUsername, robloxUserId, lastRank, message, files };
       abuseReservation = await supportAbuseService?.reserve(ticketPayload) ?? null;
 
       await supportSafetyService?.assertSupportAllowed(ticketPayload);
@@ -73,6 +106,8 @@ export function createSupportController({
         type,
         sender,
         discordUsername,
+        robloxUserId,
+        lastRank,
         message,
         files,
         createdAt: new Date()
