@@ -1835,9 +1835,9 @@ p{margin:0}
             <span class="vx-context">Use o username atual da conta, o mesmo usado para adicionar amigos. Não use apenas o nome de exibição.</span>
           </label>
           <label class="vx-field" id="vx-sup-roblox-wrap" hidden>
-            <span class="vx-fieldlabel">Seu Roblox UserId <small>Obrigatório</small></span>
-            <input id="vx-sup-roblox" class="vx-input" type="text" maxlength="15" inputmode="numeric" placeholder="ex.: 2687494600" autocomplete="off">
-            <span class="vx-context">Informe o UserId numérico da conta que receberá a análise da revogação.</span>
+            <span class="vx-fieldlabel">Seu nickname no Roblox <small>Obrigatório</small></span>
+            <input id="vx-sup-roblox" class="vx-input" type="text" maxlength="20" placeholder="ex.: jogadorEB" autocomplete="off">
+            <span class="vx-context">Informe o @username da sua conta no Roblox, não o nome de exibição.</span>
           </label>
           <label class="vx-field" id="vx-sup-rank-wrap" hidden>
             <span class="vx-fieldlabel">Última patente <small>Máximo [S-BTN]</small></span>
@@ -3287,7 +3287,7 @@ p{margin:0}
   const vxDiscordWrap = $('#vx-sup-discord-wrap');
   const vxDiscord = $('#vx-sup-discord');
   const vxRobloxWrap = $('#vx-sup-roblox-wrap');
-  const vxRobloxUserId = $('#vx-sup-roblox');
+  const vxRobloxUsername = $('#vx-sup-roblox');
   const vxRankWrap = $('#vx-sup-rank-wrap');
   const vxLastRank = $('#vx-sup-rank');
   const vxProblema = $('#vx-sup-problema');
@@ -3320,9 +3320,9 @@ p{margin:0}
 
     if (vxRobloxWrap) vxRobloxWrap.hidden = !isRevocation;
     if (vxRankWrap) vxRankWrap.hidden = !isRevocation;
-    if (vxRobloxUserId) {
-      vxRobloxUserId.required = isRevocation;
-      if (!isRevocation) vxRobloxUserId.value = '';
+    if (vxRobloxUsername) {
+      vxRobloxUsername.required = isRevocation;
+      if (!isRevocation) vxRobloxUsername.value = '';
     }
     if (vxLastRank) {
       vxLastRank.required = isRevocation;
@@ -3336,7 +3336,7 @@ p{margin:0}
     }
 
     if (isRevocation) {
-      vxContexto.textContent = 'A revogação será publicada no canal da equipe. Informe seu UserId, sua última patente e anexe uma prova válida. O limite é [S-BTN] Sub-Tenente.';
+      vxContexto.textContent = 'A revogação será publicada no canal da equipe. Informe seu nickname no Roblox, sua última patente e anexe uma prova válida. O limite é [S-BTN] Sub-Tenente.';
       vxProblema.placeholder = 'Informe a instituição anterior e qualquer contexto necessário para a equipe validar sua patente.';
       return;
     }
@@ -3383,8 +3383,9 @@ p{margin:0}
     const categoria = vxTipo?.value || 'Suporte técnico';
     const precisaDiscord = categoria !== 'Suporte técnico';
     const isRevocation = categoria === 'Revogação de patente';
+    const robloxUsername = vxRobloxUsername?.value.trim().replace(/^@/, '') || '';
     if (precisaDiscord && !vxDiscord?.value.trim()) { definirEstadoVoxel('Informe seu @username do Discord', 'error'); vxDiscord?.focus(); return; }
-    if (isRevocation && !/^\d{1,15}$/.test(vxRobloxUserId?.value.trim() || '')) { definirEstadoVoxel('Informe um Roblox UserId numérico válido', 'error'); vxRobloxUserId?.focus(); return; }
+    if (isRevocation && !/^(?=.{3,20}$)(?=.*[A-Za-z])[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?$/.test(robloxUsername)) { definirEstadoVoxel('Informe um nickname válido do Roblox', 'error'); vxRobloxUsername?.focus(); return; }
     if (isRevocation && !/^[1-7]$/.test(vxLastRank?.value || '')) { definirEstadoVoxel('Selecione uma patente válida de [REC] até [S-BTN]', 'error'); vxLastRank?.focus(); return; }
     if ((vxProblema?.value.trim().length || 0) < 20) { definirEstadoVoxel('Descreva o problema com mais contexto', 'error'); vxProblema?.focus(); return; }
     if (isRevocation && vxAnexos.length === 0) { definirEstadoVoxel('Anexe ao menos uma prova da patente anterior', 'error'); vxSolta?.focus(); return; }
@@ -3407,7 +3408,7 @@ p{margin:0}
       dados.append('message', vxProblema.value.trim());
       dados.append('website', '');
       if (isRevocation) {
-        dados.append('robloxUserId', vxRobloxUserId.value.trim());
+        dados.append('robloxUsername', robloxUsername);
         dados.append('lastRank', vxLastRank.value);
       }
       vxAnexos.forEach(file => dados.append('images', file));
@@ -3420,7 +3421,7 @@ p{margin:0}
       if (vxTipo) vxTipo.value = 'Suporte técnico';
       vxUsuario.value = '';
       if (vxDiscord) vxDiscord.value = '';
-      if (vxRobloxUserId) vxRobloxUserId.value = '';
+      if (vxRobloxUsername) vxRobloxUsername.value = '';
       if (vxLastRank) vxLastRank.value = '';
       vxProblema.value = '';
       atualizarContextoVoxel();
