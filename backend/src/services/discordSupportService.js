@@ -17,12 +17,13 @@ import { safeAttachmentName } from "../utils/text.js";
 const PRIMARY_COLOR = 0x3366ff;
 const REPORT_COLOR = 0xed4245;
 const OTHER_COLOR = 0xfee75c;
+const REVOCATION_COLOR = 0xf0b232;
 const ATTACHMENT_COLOR = 0x2b2d31;
 const ERROR_COLOR = 0xed4245;
 const SUPPORT_TICKETS_PATH = "voxel/v1/support/tickets";
 const STATUS_BUTTON_PREFIX = "voxel-support-status";
 const STATUS_MODAL_PREFIX = "voxel-support-reply";
-const PUBLIC_SUPPORT_TYPES = new Set(["report", "other"]);
+const PUBLIC_SUPPORT_TYPES = new Set(["report", "revocation", "other"]);
 
 const SUPPORT_META = Object.freeze({
   technical: Object.freeze({
@@ -34,6 +35,11 @@ const SUPPORT_META = Object.freeze({
     label: "Denúncia",
     title: "Nova denúncia de jogador",
     description: "Uma denúncia foi encaminhada para análise da equipe responsável."
+  }),
+  revocation: Object.freeze({
+    label: "Revogação de patente",
+    title: "Nova solicitação de revogação",
+    description: "Um jogador solicitou análise de patente obtida anteriormente em outra instituição."
   }),
   other: Object.freeze({
     label: "Dúvida ou outro assunto",
@@ -67,6 +73,20 @@ function getSupportMeta(type) {
   return SUPPORT_META[type] ?? SUPPORT_META.technical;
 }
 
+const REVOCATION_RANKS = Object.freeze({
+  1: "[REC] Recruta",
+  2: "[SLD] Soldado",
+  3: "[CB] Cabo",
+  4: "[T-SGT] Terceiro-Sargento",
+  5: "[S-SGT] Segundo-Sargento",
+  6: "[P-SGT] Primeiro-Sargento",
+  7: "[S-BTN] Sub-Tenente"
+});
+
+function revocationRankLabel(rank) {
+  return REVOCATION_RANKS[Number(rank)] ?? "Patente inválida";
+}
+
 function isPublicSupport(type) {
   return PUBLIC_SUPPORT_TYPES.has(type);
 }
@@ -95,6 +115,7 @@ function buildAttachments(files) {
 
 function supportColor(type) {
   if (type === "report") return REPORT_COLOR;
+  if (type === "revocation") return REVOCATION_COLOR;
   if (type === "other") return OTHER_COLOR;
   return PRIMARY_COLOR;
 }
@@ -132,9 +153,24 @@ function buildTicketEmbed(ticket, botAvatar, discordMember = null) {
     });
   }
 
+  if (ticket.type === "revocation") {
+    fields.push(
+      {
+        name: "Roblox UserId",
+        value: `\`${ticket.robloxUserId}\``,
+        inline: true
+      },
+      {
+        name: "Última patente",
+        value: revocationRankLabel(ticket.lastRank),
+        inline: true
+      }
+    );
+  }
+
   fields.push(
     {
-      name: ticket.type === "report" ? "Denúncia" : "Relato",
+      name: ticket.type === "report" ? "Denúncia" : ticket.type === "revocation" ? "Contexto da revogação" : "Relato",
       value: ticket.message,
       inline: false
     },
@@ -331,6 +367,8 @@ export class DiscordSupportService {
       sender: ticket.sender,
       discordUserId: member.id,
       discordUsername: member.user.username,
+      robloxUserId: ticket.type === "revocation" ? Number(ticket.robloxUserId) : null,
+      lastRank: ticket.type === "revocation" ? Number(ticket.lastRank) : null,
       channelId: String(channelId),
       messageId: null,
       createdAt: ticket.createdAt.getTime(),
