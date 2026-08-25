@@ -6,6 +6,7 @@ const CLAIM_CANDIDATE_LIMIT = 100;
 const RECENT_SCAN_LIMIT = 200;
 const REPAIR_SCAN_INTERVAL_MS = 15_000;
 const BRIDGE_TELEMETRY_WRITE_INTERVAL_MS = 5_000;
+const MAX_SANE_LOCK_FUTURE_MS = CLAIM_TTL_MS * 4;
 const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
 const ACTIVE_STATUSES = new Set(["pending", "processing"]);
 const ALLOWED_TYPES = new Set([
@@ -84,6 +85,68 @@ function errorSummary(error) {
   return message.slice(0, 500);
 }
 
+const TRANSACTION_PROBE_FIELD = "__voxelTransactionProbe";
+
+async function cleanupTransactionProbe(reference, probeId) {
+  await reference.transaction((current) => {
+    if (current == null) return null;
+    if (
+      typeof current === "object"
+      && String(current[TRANSACTION_PROBE_FIELD] ?? "") === probeId
+    ) {
+      return null;
+    }
+    return current;
+  }).catch(() => {});
+}
+
+async function transactionOnExisting(reference, updateFn) {
+  const probeId = randomUUID();
+  let primedFromNull = false;
+
+  const result = await reference.transaction((current) => {
+    if (current == null) {
+      primedFromNull = true;
+      return { [TRANSACTION_PROBE_FIELD]: probeId };
+    }
+
+    if (typeof current !== "object") return;
+
+    // Another process may be probing the same missing ref. Never mutate a probe record.
+    if (typeof current[TRANSACTION_PROBE_FIELD] === "string") {
+      return current;
+    }
+
+    return updateFn(current);
+  });
+
+  const value = result.snapshot.val();
+  const committedProbe = value
+    && typeof value === "object"
+    && typeof value[TRANSACTION_PROBE_FIELD] === "string";
+
+  if (committedProbe) {
+    await cleanupTransactionProbe(
+      reference,
+      String(value[TRANSACTION_PROBE_FIELD])
+    );
+
+    return {
+      committed: false,
+      snapshot: result.snapshot,
+      missing: true,
+      primedFromNull
+    };
+  }
+
+  return {
+    committed: result.committed,
+    snapshot: result.snapshot,
+    missing: false,
+    primedFromNull
+  };
+}
+
 export class CommunityOperationStore {
   constructor({ database }) {
     this.root = database.ref(ROOT_PATH);
@@ -110,6 +173,8 @@ export class CommunityOperationStore {
     this.recoveredSameOperationLocks = 0;
     this.recoveredCorruptLocks = 0;
     this.lastTelemetryWriteByServer = new Map();
+    this.transactionNullPrimerCount = 0;
+    this.lastTransactionNullPrimerAt = 0;
   }
 
   async init() {
@@ -201,6 +266,15 @@ export class CommunityOperationStore {
   clearError() {
     this.lastError = null;
     this.lastErrorAt = 0;
+  }
+
+  async runExistingTransaction(reference, updateFn) {
+    const result = await transactionOnExisting(reference, updateFn);
+    if (result.primedFromNull) {
+      this.transactionNullPrimerCount += 1;
+      this.lastTransactionNullPrimerAt = now();
+    }
+    return result;
   }
 
   async enqueue({ type, payload, createdByDiscordId }) {
@@ -374,8 +448,7 @@ export class CommunityOperationStore {
         }
 
         const resourceKey = operation.resourceKey || operationResourceKey(operation.payload);
-        const claim = await operationRef.transaction((current) => {
-          if (!current || typeof current !== "object") return;
+        const claim = await this.runExistingTransaction(operationRef, (current) => {
           if (TERMINAL_STATUSES.has(String(current.status ?? ""))) return;
 
           const activeClaim = String(current.status ?? "") === "processing"
@@ -457,8 +530,7 @@ export class CommunityOperationStore {
 
   async failInvalidOperation(operationRef, queueKey, reason) {
     const timestamp = now();
-    await operationRef.transaction((current) => {
-      if (!current || typeof current !== "object") return;
+    await this.runExistingTransaction(operationRef, (current) => {
       if (TERMINAL_STATUSES.has(String(current.status ?? ""))) return;
 
       return {
@@ -483,8 +555,7 @@ export class CommunityOperationStore {
     const timestamp = now();
     let queueKey = null;
 
-    const result = await operationRef.transaction((current) => {
-      if (!current || typeof current !== "object") return;
+    const result = await this.runExistingTransaction(operationRef, (current) => {
       if (String(current.status ?? "") !== "processing") return;
       if (String(current.claimServerId ?? "") !== String(serverId)) return;
 
@@ -517,9 +588,7 @@ export class CommunityOperationStore {
     let resourceKey = null;
     let claimServerId = null;
 
-    const result = await operationRef.transaction((current) => {
-      if (!current || typeof current !== "object") return;
-
+    const result = await this.runExistingTransaction(operationRef, (current) => {
       const status = String(current.status ?? "");
       if (status === "cancelled") return current;
 
@@ -590,8 +659,7 @@ export class CommunityOperationStore {
     let previousQueueKey = null;
     let previousRecentKey = null;
 
-    const result = await operationRef.transaction((current) => {
-      if (!current || typeof current !== "object") return;
+    const result = await this.runExistingTransaction(operationRef, (current) => {
       const status = String(current.status ?? "");
       if (status !== "failed" && status !== "cancelled") return;
 
@@ -759,7 +827,7 @@ export class CommunityOperationStore {
     });
 
     return {
-      queueVersion: 5,
+      queueVersion: 6,
       pendingCount: pendingSnapshot.numChildren(),
       activeOperationCount,
       orphanedOperationCount,
@@ -782,7 +850,9 @@ export class CommunityOperationStore {
       lastLockExpiresAt: this.lastLockExpiresAt || null,
       lastError: this.lastError,
       lastErrorAt: this.lastErrorAt || null,
-      bridgePoll: bridgeTelemetrySnapshot.val() ?? null
+      bridgePoll: bridgeTelemetrySnapshot.val() ?? null,
+      transactionNullPrimerCount: this.transactionNullPrimerCount,
+      lastTransactionNullPrimerAt: this.lastTransactionNullPrimerAt || null
     };
   }
 
