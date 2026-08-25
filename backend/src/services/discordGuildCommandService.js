@@ -561,6 +561,32 @@ export class DiscordGuildCommandService {
     throw error;
   }
 
+  assertCommunityOperator(interaction) {
+    if (VOXEL_OWNER_IDS.includes(interaction.user.id)) return;
+    if (interactionHasAdministratorAccess(interaction)) return;
+
+    const allowed = [
+      "oficiais",
+      "superiores",
+      "moderadores",
+      "administradores",
+      "comandantes"
+    ]
+      .map((key) => this.roleIds[key])
+      .filter(Boolean);
+    const memberRoles = interaction.member?.roles?.cache;
+    if (memberRoles && allowed.some((roleId) => memberRoles.has(roleId))) return;
+
+    const rawRoles = Array.isArray(interaction.member?.roles) ? interaction.member.roles : [];
+    if (allowed.some((roleId) => rawRoles.includes(roleId))) return;
+
+    const error = new Error(
+      "Este comando é restrito a Oficiais, Superiores, Moderadores, Administradores, Comandantes e membros com permissão de Administrador."
+    );
+    error.code = "COMMUNITY_OPERATOR_REQUIRED";
+    throw error;
+  }
+
   assertOwner(interaction) {
     if (VOXEL_OWNER_IDS.includes(interaction.user.id)) return;
 
@@ -894,7 +920,7 @@ export class DiscordGuildCommandService {
   }
 
   async handleChangeRankGame(interaction) {
-    this.assertOwner(interaction);
+    this.assertCommunityOperator(interaction);
     const targetRobloxUserId = parseRobloxUserId(interaction.options.getString("user-id", true));
     const communityName = interaction.options.getString("comunidade", true).trim();
     const rank = Number.parseInt(interaction.options.getString("rank", true), 10);
@@ -909,7 +935,7 @@ export class DiscordGuildCommandService {
   }
 
   async handleCommunityAddGame(interaction) {
-    this.assertOwner(interaction);
+    this.assertCommunityOperator(interaction);
     const targetRobloxUserId = parseRobloxUserId(interaction.options.getString("user-id", true));
     const communityName = interaction.options.getString("comunidade", true).trim();
     const rank = Number.parseInt(interaction.options.getString("rank", true), 10);
@@ -924,7 +950,7 @@ export class DiscordGuildCommandService {
   }
 
   async handleCommunityRemoveGame(interaction) {
-    this.assertOwner(interaction);
+    this.assertCommunityOperator(interaction);
     const targetRobloxUserId = parseRobloxUserId(interaction.options.getString("user-id", true));
     const communityName = interaction.options.getString("comunidade", true).trim();
 
