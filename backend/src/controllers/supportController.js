@@ -21,12 +21,9 @@ function removeLegacyTypePrefix(message) {
   return String(message ?? "").replace(LEGACY_TYPE_PREFIX, "").trim();
 }
 
-function parseRobloxUserId(value) {
-  const raw = String(value ?? "").trim();
-  if (!/^\d{1,15}$/.test(raw)) return null;
-
-  const userId = Number(raw);
-  return Number.isSafeInteger(userId) && userId > 0 ? userId : null;
+function parseRobloxUsername(value) {
+  const username = normalizeSingleLine(value, 64).replace(/^@/, "");
+  return /^(?=.{3,20}$)(?=.*[A-Za-z])[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?$/.test(username) ? username : null;
 }
 
 function parseRevocationRank(value) {
@@ -55,7 +52,7 @@ export function createSupportController({
       const type = normalizeSupportType(req.body.type, rawMessage);
       const message = normalizeMultiline(removeLegacyTypePrefix(rawMessage), 1800);
       const discordUsername = normalizeSingleLine(req.body.discordUsername, 40).replace(/^@/, "");
-      const robloxUserId = type === "revocation" ? parseRobloxUserId(req.body.robloxUserId) : null;
+      const robloxUsername = type === "revocation" ? parseRobloxUsername(req.body.robloxUsername) : null;
       const lastRank = type === "revocation" ? parseRevocationRank(req.body.lastRank) : null;
       const files = Array.isArray(req.files) ? req.files : [];
 
@@ -69,8 +66,8 @@ export function createSupportController({
         return;
       }
 
-      if (type === "revocation" && !robloxUserId) {
-        res.status(400).json({ error: "Informe um Roblox UserId numérico válido." });
+      if (type === "revocation" && !robloxUsername) {
+        res.status(400).json({ error: "Informe um nickname válido do Roblox." });
         return;
       }
 
@@ -95,7 +92,7 @@ export function createSupportController({
         return;
       }
 
-      const ticketPayload = { type, sender, discordUsername, robloxUserId, lastRank, message, files };
+      const ticketPayload = { type, sender, discordUsername, robloxUsername, lastRank, message, files };
       abuseReservation = await supportAbuseService?.reserve(ticketPayload) ?? null;
 
       await supportSafetyService?.assertSupportAllowed(ticketPayload);
@@ -106,7 +103,7 @@ export function createSupportController({
         type,
         sender,
         discordUsername,
-        robloxUserId,
+        robloxUsername,
         lastRank,
         message,
         files,
