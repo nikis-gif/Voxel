@@ -23,6 +23,7 @@ export function createApp({
   gameBanService,
   gameBridgeService,
   gamePresenceService,
+  communityOperationStore,
   rewardService,
   recruitmentService,
   staffReportService,
@@ -73,6 +74,7 @@ export function createApp({
     app.use("/api/game-bridge", createGameBridgeRouter({
       gameBridgeService,
       gamePresenceService,
+      communityOperationStore,
       robloxApiKey: env.verification.robloxApiKey
     }));
 
